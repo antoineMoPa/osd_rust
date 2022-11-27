@@ -1,4 +1,7 @@
 use std::{ops::Mul};
+use serde::{Serialize, Deserialize};
+use serde_json;
+
 use bevy::{
     input::{keyboard::KeyCode, Input},
     pbr::DirectionalLightShadowMap,
@@ -7,10 +10,33 @@ use bevy::{
 use bevy_rapier3d::prelude::*;
 
 #[derive(Default)]
+#[derive(Serialize, Deserialize, Debug)]
 struct CameraTarget {
     position: Option<Vec3>,
     up: Option<Vec3>,
     look_at: Option<Vec3>,
+}
+
+
+#[derive(Serialize, Deserialize, Debug)]
+#[derive(Copy, Clone)]
+struct Point {
+    x: f32,
+    y: f32,
+    z: f32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Segment {
+    a: Point,
+    b: Point
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[derive(Default)]
+struct RoadNetwork {
+    last_position: Option<Point>,
+    road_segments: Vec<Segment>
 }
 
 #[derive(Default)]
@@ -18,8 +44,8 @@ struct Game {
     player_car: Option<Entity>,
     camera_target: CameraTarget,
     camera: Option<Entity>,
+    road_network: RoadNetwork
 }
-
 
 fn main() {
     App::new()
@@ -39,7 +65,9 @@ fn main() {
         .add_system(keyboard_input_system)
         .add_system(camera_target_car_system)
         .add_system(camera_target_target_system)
+        .add_system(road_network_creation_system)
         .run();
+
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -162,6 +190,47 @@ fn keyboard_input_system(
         ext_force.torque = transform.rotation * Vec3::new(up_down_torque, 0.0, 0.0);
     }
 }
+
+fn road_network_creation_system(
+    mut transforms: Query<&mut Transform>,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut game: ResMut<Game>,
+) {
+    if keyboard_input.just_released(KeyCode::I) {
+        let entity = match game.player_car {
+                Some(entity) => entity,
+                _ => {
+                    return;
+                }
+            };
+
+        let transform = match transforms.get_mut(entity) {
+            Ok(transform) => transform,
+            _ => {
+                return;
+            }
+        };
+        let translation = transform.translation;
+        let current_point = Point { x: translation.x, y: translation.y, z: translation.z };
+
+        let last_position = match &game.road_network.last_position {
+            Some(position) => position,
+            _ => {
+                game.road_network.last_position = Some(current_point);
+                return;
+            }
+        };
+
+        let segment = Segment { a: last_position.clone(), b: current_point };
+
+        game.road_network.road_segments.push(segment);
+
+        let serialized = serde_json::to_string(&game.road_network).unwrap();
+        println!("serialized = {}", serialized);
+    }
+}
+
+
 
 
 fn camera_target_car_system(
