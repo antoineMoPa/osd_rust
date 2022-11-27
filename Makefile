@@ -8,3 +8,7 @@ build:
 
 serve:
 	python3 -m http.server --directory www
+
+
+run-native:
+	cargo run

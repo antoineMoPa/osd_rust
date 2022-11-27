@@ -13,5 +13,5 @@ web-sys = "0.3.60"
 name = "main"
 path = "./main.rs"
 
-[profile.dev.package.bevy_rapier3d]
+[profile.dev]
 opt-level = 3

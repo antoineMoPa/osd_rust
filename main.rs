@@ -36,13 +36,13 @@ fn main() {
         .add_startup_system(setup_graphics)
         .add_startup_system(setup_dynamic_objects)
         .add_startup_system(setup_window_size)
-        .add_system(print_ball_altitude)
         .add_system(keyboard_input_system)
         .add_system(camera_target_car_system)
         .add_system(camera_target_target_system)
         .run();
 }
 
+#[cfg(target_arch = "wasm32")]
 fn setup_window_size(mut windows: ResMut<Windows>) {
     let window = match windows.get_primary_mut() {
         Some(window) => window,
@@ -141,7 +141,7 @@ fn keyboard_input_system(
     }
 
     if keyboard_input.pressed(KeyCode::Right) {
-        ext_force.torque = Vec3::new(0.0, -torque, 0.0);
+        ext_force.torque = transform.rotation * Vec3::new(0.0, -torque, 0.0);
     }
 
     if keyboard_input.pressed(KeyCode::A) {
@@ -241,11 +241,5 @@ fn setup_dynamic_objects(mut commands: Commands, asset_server: Res<AssetServer>,
                 .insert(ColliderMassProperties::Density(0.02))
                 .insert_bundle(TransformBundle::from(Transform::from_xyz(i as f32 * space - offset, 4.0, j as f32 * space - offset)));
         }
-    }
-}
-
-fn print_ball_altitude(positions: Query<&Transform, With<RigidBody>>) {
-    for transform in positions.iter() {
-        println!("Ball altitude: {}", transform.translation.y);
     }
 }
