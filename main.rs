@@ -1,5 +1,8 @@
-use std::{ops::Mul};
-use serde::{Serialize, Deserialize};
+use std::{
+    ops::Mul,
+    str
+};
+use serde::{Serialize, Deserialize, ser::Error};
 use serde_json;
 
 use bevy::{
@@ -9,8 +12,7 @@ use bevy::{
 };
 use bevy_rapier3d::prelude::*;
 
-#[derive(Default)]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Default, Serialize, Deserialize, Debug)]
 struct CameraTarget {
     position: Option<Vec3>,
     up: Option<Vec3>,
@@ -18,22 +20,20 @@ struct CameraTarget {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
-#[derive(Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct Point {
     x: f32,
     y: f32,
     z: f32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct Segment {
     a: Point,
     b: Point
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize, Debug)]
 struct RoadNetwork {
     last_position: Option<Point>,
     road_segments: Vec<Segment>
@@ -44,10 +44,48 @@ struct Game {
     player_car: Option<Entity>,
     camera_target: CameraTarget,
     camera: Option<Entity>,
-    road_network: RoadNetwork
+    road_network: RoadNetwork,
+}
+
+use wasm_bindgen::{prelude::*, JsCast};
+use wasm_bindgen_futures::JsFuture;
+use wasm_bindgen_futures::spawn_local;
+use web_sys::{Response, ReadableStream};
+use web_sys::ReadableStreamDefaultReader;
+use js_sys::Uint8Array;
+
+async fn response_to_string(message: JsValue) -> Result<String, JsValue>{
+    let response: Response = message.dyn_into()?;
+    let stream: ReadableStream = response.body().unwrap();
+    let reader: ReadableStreamDefaultReader = stream.get_reader().dyn_into()?;
+    let result_value: JsValue = JsFuture::from(reader.read()).await?;
+    let array: Uint8Array = js_sys::Reflect::get(&result_value, &JsValue::from("value"))?.dyn_into()?;
+
+    let rust_vec: Vec<u8> = array.to_vec();
+    let str_string: &str = str::from_utf8(&rust_vec).unwrap();
+    let string: String = str_string.to_string();
+
+    return Ok(string);
+}
+
+async fn get_road_network_data() {
+    let window = web_sys::window().unwrap();
+    let url = String::from("assets/road_network.json");
+    let future = JsFuture::from(window.fetch_with_str(&url)).await;
+
+    match future {
+        Ok(future) => {
+            let string: String = response_to_string(future).await.unwrap();
+            web_sys::console::log_1(&JsValue::from(string));
+        }
+        _ => {
+            web_sys::console::log_1(&JsValue::from(String::from("Error in fetch")));
+        }
+    }
 }
 
 fn main() {
+    spawn_local(get_road_network_data());
     App::new()
         .init_resource::<Game>()
         .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
@@ -59,6 +97,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
+        .add_startup_system(setup_road_network)
         .add_startup_system(setup_graphics)
         .add_startup_system(setup_dynamic_objects)
         .add_startup_system(setup_window_size)
@@ -67,8 +106,16 @@ fn main() {
         .add_system(camera_target_target_system)
         .add_system(road_network_creation_system)
         .run();
+}
+
+fn setup_road_network(
+    mut commands: Commands,
+    mut game: ResMut<Game>,
+    asset_server: Res<AssetServer>,
+) {
 
 }
+
 
 #[cfg(target_arch = "wasm32")]
 fn setup_window_size(mut windows: ResMut<Windows>) {
@@ -196,7 +243,7 @@ fn road_network_creation_system(
     keyboard_input: Res<Input<KeyCode>>,
     mut game: ResMut<Game>,
 ) {
-    if keyboard_input.just_released(KeyCode::I) {
+    if keyboard_input.just_released(KeyCode::E) {
         let entity = match game.player_car {
                 Some(entity) => entity,
                 _ => {
@@ -224,9 +271,20 @@ fn road_network_creation_system(
         let segment = Segment { a: last_position.clone(), b: current_point };
 
         game.road_network.road_segments.push(segment);
+    }
 
+    // Output/Dump road network
+    if keyboard_input.just_released(KeyCode::O) {
         let serialized = serde_json::to_string(&game.road_network).unwrap();
-        println!("serialized = {}", serialized);
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            web_sys::console::log_2(&"Road data:".into(), &serialized.into());
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            println!("serialized = {}", serialized);
+        }
     }
 }
 
@@ -268,7 +326,11 @@ fn camera_target_target_system(
     camera_transform.translation = camera_target_position;
 }
 
-fn setup_dynamic_objects(mut commands: Commands, asset_server: Res<AssetServer>, mut game: ResMut<Game>) {
+fn setup_dynamic_objects(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut game: ResMut<Game>
+) {
     // Create the ground.
     commands
         .spawn()
