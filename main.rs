@@ -76,7 +76,11 @@ async fn get_road_network_data() {
     match future {
         Ok(future) => {
             let string: String = response_to_string(future).await.unwrap();
-            web_sys::console::log_1(&JsValue::from(string));
+            let road_data: RoadNetwork = serde_json::from_str(&string).unwrap();
+            let out: String = serde_json::to_string(&road_data).unwrap();
+
+            web_sys::console::log_1(&JsValue::from("RESERIALIZED:"));
+            web_sys::console::log_1(&JsValue::from(out));
         }
         _ => {
             web_sys::console::log_1(&JsValue::from(String::from("Error in fetch")));
