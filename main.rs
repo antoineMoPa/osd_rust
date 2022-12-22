@@ -8,7 +8,7 @@ use serde_json;
 use bevy::{
     input::{keyboard::KeyCode, Input},
     pbr::DirectionalLightShadowMap,
-    prelude::*,
+    prelude::*, render::{render_resource::PrimitiveTopology, mesh::Indices},
 };
 use bevy_rapier3d::prelude::*;
 
@@ -89,7 +89,6 @@ async fn get_road_network_data() {
 }
 
 fn main() {
-    spawn_local(get_road_network_data());
     App::new()
         .init_resource::<Game>()
         .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
@@ -116,8 +115,22 @@ fn setup_road_network(
     mut commands: Commands,
     mut game: ResMut<Game>,
     asset_server: Res<AssetServer>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    // spawn_local(get_road_network_data());
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![[1.0, 1.0, 1.0], [0.0, 2.0, 1.0], [1.0, 2.0, 1.0]]);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]);
+    mesh.set_indices(Some(Indices::U32(vec![0,2,1])));
 
+    // add entities to the world
+    // plane
+    commands.spawn_bundle(PbrBundle {
+        mesh: meshes.add(mesh),
+        material: materials.add(Color::rgb(0.9, 0.5, 0.3).into()),
+        ..default()
+    });
 }
 
 
@@ -362,19 +375,19 @@ fn setup_dynamic_objects(
                 })
                 .id());
 
-    let ball_amount_per_dimension = 30;
-
-    for i in 1..ball_amount_per_dimension {
-        for j in 1..ball_amount_per_dimension {
-            let space = 2.0;
-            let offset = space * (ball_amount_per_dimension as f32) / 2.0;
-            commands
-                .spawn()
-                .insert(RigidBody::Dynamic)
-                .insert(Collider::ball(0.5))
-                .insert(Restitution::coefficient(0.7))
-                .insert(ColliderMassProperties::Density(0.02))
-                .insert_bundle(TransformBundle::from(Transform::from_xyz(i as f32 * space - offset, 4.0, j as f32 * space - offset)));
-        }
-    }
+    // let ball_amount_per_dimension = 30;
+    //
+    // for i in 1..ball_amount_per_dimension {
+    //     for j in 1..ball_amount_per_dimension {
+    //         let space = 2.0;
+    //         let offset = space * (ball_amount_per_dimension as f32) / 2.0;
+    //         commands
+    //             .spawn()
+    //             .insert(RigidBody::Dynamic)
+    //             .insert(Collider::ball(0.5))
+    //             .insert(Restitution::coefficient(0.7))
+    //             .insert(ColliderMassProperties::Density(0.02))
+    //             .insert_bundle(TransformBundle::from(Transform::from_xyz(i as f32 * space - offset, 4.0, j as f32 * space - offset)));
+    //     }
+    // }
 }
