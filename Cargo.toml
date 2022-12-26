@@ -29,7 +29,7 @@ features = [
 
 [[bin]]
 name = "main"
-path = "./main.rs"
+path = "./src/main.rs"
 
 [profile.dev]
 opt-level = 3

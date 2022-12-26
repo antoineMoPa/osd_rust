@@ -2,7 +2,7 @@ use std::{
     ops::Mul,
     str
 };
-use serde::{Serialize, Deserialize, ser::Error};
+use serde::{Serialize, Deserialize};
 use serde_json;
 
 use bevy::{
@@ -47,12 +47,46 @@ struct Game {
     road_network: RoadNetwork,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+enum RoadNetworkLoadingState {
+    Loading,
+    Loaded,
+}
+
 use wasm_bindgen::{prelude::*, JsCast};
 use wasm_bindgen_futures::JsFuture;
-use wasm_bindgen_futures::spawn_local;
 use web_sys::{Response, ReadableStream};
 use web_sys::ReadableStreamDefaultReader;
 use js_sys::Uint8Array;
+
+mod windowmailer;
+
+fn main() {
+    App::new()
+        .init_resource::<Game>()
+        .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
+        .insert_resource(DirectionalLightShadowMap { size: 2048 })
+        .insert_resource(AmbientLight {
+            color: Color::rgb(0.6, 0.4, 0.5),
+            brightness: 0.6,
+        })
+        .add_state(RoadNetworkLoadingState::Loading)
+        .add_plugins(DefaultPlugins)
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugin(RapierDebugRenderPlugin::default())
+        .add_startup_system(setup_graphics)
+        .add_startup_system(setup_dynamic_objects)
+        .add_startup_system(setup_window_size)
+        .add_system(keyboard_input_system)
+        .add_system(camera_target_car_system)
+        .add_system(camera_target_target_system)
+        .add_startup_system(load_road_network)
+        .add_system_set(
+            SystemSet::on_enter(RoadNetworkLoadingState::Loaded)
+                .with_system(build_road_network)
+        )
+        .run();
+}
 
 async fn response_to_string(message: JsValue) -> Result<String, JsValue>{
     let response: Response = message.dyn_into()?;
@@ -68,57 +102,44 @@ async fn response_to_string(message: JsValue) -> Result<String, JsValue>{
     return Ok(string);
 }
 
-async fn get_road_network_data() {
-    let window = web_sys::window().unwrap();
-    let url = String::from("assets/road_network.json");
-    let future = JsFuture::from(window.fetch_with_str(&url)).await;
 
-    match future {
-        Ok(future) => {
-            let string: String = response_to_string(future).await.unwrap();
-            let road_data: RoadNetwork = serde_json::from_str(&string).unwrap();
-            let out: String = serde_json::to_string(&road_data).unwrap();
+fn load_road_network(
+    mut commands: Commands,
+    mut game: ResMut<Game>,
+    asset_server: Res<AssetServer>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut road_network_loading_state: ResMut<State<RoadNetworkLoadingState>>
+) {
+    let load_assets = async move {
+        let window = web_sys::window().unwrap();
+        let url = String::from("assets/road_network.json");
+        let future = JsFuture::from(window.fetch_with_str(&url)).await;
 
-            web_sys::console::log_1(&JsValue::from("RESERIALIZED:"));
-            web_sys::console::log_1(&JsValue::from(out));
+        match future {
+            Ok(future) => {
+                let string: String = response_to_string(future).await.unwrap();
+                let road_data: RoadNetwork = serde_json::from_str(&string).unwrap();
+                let out: String = serde_json::to_string(&road_data).unwrap();
+
+                windowmailer::send_message(String::from("ROAD_NETWORK_LOADED"), String::from("ARE_ROADS_LOADED"));
+            }
+            _ => {
+                web_sys::console::log_1(&JsValue::from(String::from("Error in fetch")));
+            }
         }
-        _ => {
-            web_sys::console::log_1(&JsValue::from(String::from("Error in fetch")));
-        }
-    }
+    };
+
+    wasm_bindgen_futures::spawn_local(load_assets);
 }
 
-fn main() {
-    App::new()
-        .init_resource::<Game>()
-        .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
-        .insert_resource(DirectionalLightShadowMap { size: 2048 })
-        .insert_resource(AmbientLight {
-            color: Color::rgb(0.6, 0.4, 0.5),
-            brightness: 0.6,
-        })
-        .add_plugins(DefaultPlugins)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
-        .add_plugin(RapierDebugRenderPlugin::default())
-        .add_startup_system(setup_road_network)
-        .add_startup_system(setup_graphics)
-        .add_startup_system(setup_dynamic_objects)
-        .add_startup_system(setup_window_size)
-        .add_system(keyboard_input_system)
-        .add_system(camera_target_car_system)
-        .add_system(camera_target_target_system)
-        .add_system(road_network_creation_system)
-        .run();
-}
-
-fn setup_road_network(
+fn build_road_network(
     mut commands: Commands,
     mut game: ResMut<Game>,
     asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // spawn_local(get_road_network_data());
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![[1.0, 1.0, 1.0], [0.0, 2.0, 1.0], [1.0, 2.0, 1.0]]);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]);
