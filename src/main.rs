@@ -20,25 +20,6 @@ struct CameraTarget {
 }
 
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct Point {
-    x: f32,
-    y: f32,
-    z: f32,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct Segment {
-    a: Point,
-    b: Point
-}
-
-#[derive(Default, Serialize, Deserialize, Debug)]
-struct RoadNetwork {
-    last_position: Option<Point>,
-    road_segments: Vec<Segment>
-}
-
 #[derive(Default)]
 struct Game {
     player_car: Option<Entity>,
@@ -60,6 +41,9 @@ use web_sys::ReadableStreamDefaultReader;
 use js_sys::Uint8Array;
 
 mod windowmailer;
+mod road_network_builder;
+
+use road_network_builder::*;
 
 const ROAD_NETWORK_DATA_CHANNEL: &str = "ROAD_NETWORK_DATA";
 
@@ -140,29 +124,19 @@ fn road_network_load_check(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut road_network_loading_state: ResMut<State<RoadNetworkLoadingState>>
 ) {
-    if windowmailer::message_count(String::from(ROAD_NETWORK_DATA_CHANNEL)) > 0 {
-        let serialized_road_data: String = windowmailer::read_message(String::from(ROAD_NETWORK_DATA_CHANNEL));
-        let road_data: RoadNetwork = serde_json::from_str(&serialized_road_data).unwrap();
-
-        let road_data_reserialized: String = serde_json::to_string(&road_data).unwrap();
-
-        web_sys::console::log_1(&JsValue::from(road_data_reserialized));
-
-        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![[1.0, 1.0, 1.0], [0.0, 2.0, 1.0], [1.0, 2.0, 1.0]]);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]);
-        mesh.set_indices(Some(Indices::U32(vec![0,2,1])));
-
-        // add entities to the world
-        // plane
-        commands.spawn_bundle(PbrBundle {
-            mesh: meshes.add(mesh),
-            material: materials.add(Color::rgb(0.9, 0.5, 0.3).into()),
-            ..default()
-        });
-
-        road_network_loading_state.set(RoadNetworkLoadingState::Loaded);
+    if windowmailer::message_count(String::from(ROAD_NETWORK_DATA_CHANNEL)) <= 0 {
+        return;
     }
+    let serialized_road_data: String = windowmailer::read_message(String::from(ROAD_NETWORK_DATA_CHANNEL));
+    let road_data: RoadNetwork = serde_json::from_str(&serialized_road_data).unwrap();
+
+    let road_data_reserialized: String = serde_json::to_string(&road_data).unwrap();
+
+    web_sys::console::log_1(&JsValue::from(road_data_reserialized));
+
+    build_road_network(game.road_network.clone(), commands, meshes, materials);
+
+    road_network_loading_state.set(RoadNetworkLoadingState::Loaded);
 }
 
 

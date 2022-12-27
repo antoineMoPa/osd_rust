@@ -1,4 +1,4 @@
-/// Send messages between the main thread and
+/// Send messages through the window object.
 
 use wasm_bindgen::prelude::*;
 use js_sys::Map;
