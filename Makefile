@@ -10,5 +10,8 @@ serve:
 	python3 -m http.server --directory www
 
 
+doc:
+	cargo doc --open
+
 run-native:
 	cargo run

@@ -61,6 +61,8 @@ use js_sys::Uint8Array;
 
 mod windowmailer;
 
+const ROAD_NETWORK_DATA_CHANNEL: &str = "ROAD_NETWORK_DATA";
+
 fn main() {
     App::new()
         .init_resource::<Game>()
@@ -82,8 +84,8 @@ fn main() {
         .add_system(camera_target_target_system)
         .add_startup_system(load_road_network)
         .add_system_set(
-            SystemSet::on_enter(RoadNetworkLoadingState::Loaded)
-                .with_system(build_road_network)
+            SystemSet::on_update(RoadNetworkLoadingState::Loading)
+                .with_system(road_network_load_check)
         )
         .run();
 }
@@ -109,7 +111,6 @@ fn load_road_network(
     asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut road_network_loading_state: ResMut<State<RoadNetworkLoadingState>>
 ) {
     let load_assets = async move {
         let window = web_sys::window().unwrap();
@@ -119,10 +120,7 @@ fn load_road_network(
         match future {
             Ok(future) => {
                 let string: String = response_to_string(future).await.unwrap();
-                let road_data: RoadNetwork = serde_json::from_str(&string).unwrap();
-                let out: String = serde_json::to_string(&road_data).unwrap();
-
-                windowmailer::send_message(String::from("ROAD_NETWORK_LOADED"), String::from("ARE_ROADS_LOADED"));
+                windowmailer::send_message(String::from(ROAD_NETWORK_DATA_CHANNEL), string);
             }
             _ => {
                 web_sys::console::log_1(&JsValue::from(String::from("Error in fetch")));
@@ -133,25 +131,38 @@ fn load_road_network(
     wasm_bindgen_futures::spawn_local(load_assets);
 }
 
-fn build_road_network(
+// Waits for roads to load
+fn road_network_load_check(
     mut commands: Commands,
     mut game: ResMut<Game>,
     asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut road_network_loading_state: ResMut<State<RoadNetworkLoadingState>>
 ) {
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![[1.0, 1.0, 1.0], [0.0, 2.0, 1.0], [1.0, 2.0, 1.0]]);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]);
-    mesh.set_indices(Some(Indices::U32(vec![0,2,1])));
+    if windowmailer::message_count(String::from(ROAD_NETWORK_DATA_CHANNEL)) > 0 {
+        let serialized_road_data: String = windowmailer::read_message(String::from(ROAD_NETWORK_DATA_CHANNEL));
+        let road_data: RoadNetwork = serde_json::from_str(&serialized_road_data).unwrap();
 
-    // add entities to the world
-    // plane
-    commands.spawn_bundle(PbrBundle {
-        mesh: meshes.add(mesh),
-        material: materials.add(Color::rgb(0.9, 0.5, 0.3).into()),
-        ..default()
-    });
+        let road_data_reserialized: String = serde_json::to_string(&road_data).unwrap();
+
+        web_sys::console::log_1(&JsValue::from(road_data_reserialized));
+
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![[1.0, 1.0, 1.0], [0.0, 2.0, 1.0], [1.0, 2.0, 1.0]]);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]);
+        mesh.set_indices(Some(Indices::U32(vec![0,2,1])));
+
+        // add entities to the world
+        // plane
+        commands.spawn_bundle(PbrBundle {
+            mesh: meshes.add(mesh),
+            material: materials.add(Color::rgb(0.9, 0.5, 0.3).into()),
+            ..default()
+        });
+
+        road_network_loading_state.set(RoadNetworkLoadingState::Loaded);
+    }
 }
 
 
@@ -325,9 +336,6 @@ fn road_network_creation_system(
         }
     }
 }
-
-
-
 
 fn camera_target_car_system(
     mut transforms: Query<&mut Transform>,
