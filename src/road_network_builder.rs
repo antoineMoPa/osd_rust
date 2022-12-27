@@ -7,21 +7,14 @@ use bevy::{
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Point {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Segment {
-    pub a: Point,
-    pub b: Point
+    pub a: Vec3,
+    pub b: Vec3
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct RoadNetwork {
-    pub last_position: Option<Point>,
+    pub last_position: Option<Vec3>,
     pub road_segments: Vec<Segment>
 }
 

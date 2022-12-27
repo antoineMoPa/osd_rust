@@ -66,6 +66,7 @@ fn main() {
         .add_system(keyboard_input_system)
         .add_system(camera_target_car_system)
         .add_system(camera_target_target_system)
+        .add_system(road_network_creation_system)
         .add_startup_system(load_road_network)
         .add_system_set(
             SystemSet::on_update(RoadNetworkLoadingState::Loading)
@@ -281,7 +282,7 @@ fn road_network_creation_system(
             }
         };
         let translation = transform.translation;
-        let current_point = Point { x: translation.x, y: translation.y, z: translation.z };
+        let current_point = Vec3 { x: translation.x, y: translation.y, z: translation.z };
 
         let last_position = match &game.road_network.last_position {
             Some(position) => position,
