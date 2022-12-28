@@ -36,8 +36,11 @@ enum RoadNetworkLoadingState {
 
 use wasm_bindgen::{prelude::*, JsCast};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Response, ReadableStream};
-use web_sys::ReadableStreamDefaultReader;
+use web_sys::{
+    Response,
+    ReadableStream,
+    ReadableStreamDefaultReader
+};
 use js_sys::Uint8Array;
 
 mod windowmailer;
@@ -129,13 +132,9 @@ fn road_network_load_check(
         return;
     }
     let serialized_road_data: String = windowmailer::read_message(String::from(ROAD_NETWORK_DATA_CHANNEL));
-    let road_data: RoadNetwork = serde_json::from_str(&serialized_road_data).unwrap();
+    game.road_network = serde_json::from_str(&serialized_road_data).unwrap();
 
-    let road_data_reserialized: String = serde_json::to_string(&road_data).unwrap();
-
-    web_sys::console::log_1(&JsValue::from(road_data_reserialized));
-
-    build_road_network(game.road_network.clone(), commands, meshes, materials);
+    build_road_network(&game.road_network, commands, meshes, materials);
 
     road_network_loading_state.set(RoadNetworkLoadingState::Loaded);
 }
@@ -284,13 +283,15 @@ fn road_network_creation_system(
         let translation = transform.translation;
         let current_point = Vec3 { x: translation.x, y: translation.y, z: translation.z };
 
-        let last_position = match &game.road_network.last_position {
+        let last_position = match game.road_network.last_position {
             Some(position) => position,
             _ => {
-                game.road_network.last_position = Some(current_point);
+                game.road_network.last_position = Some(current_point.clone());
                 return;
             }
         };
+
+        game.road_network.last_position = Some(current_point.clone());
 
         let segment = Segment { a: last_position.clone(), b: current_point };
 
@@ -303,7 +304,7 @@ fn road_network_creation_system(
 
         #[cfg(target_arch = "wasm32")]
         {
-            web_sys::console::log_2(&"Road data:".into(), &serialized.into());
+            web_sys::console::log_1(&serialized.into());
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
