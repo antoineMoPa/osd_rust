@@ -7,7 +7,9 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Segment {
     pub a: Vec3,
-    pub b: Vec3
+    pub b: Vec3,
+    /// Normal/Up vector of the segment. (usually, the up vector of a car driving on the road)
+    pub up: Vec3,
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
@@ -29,35 +31,56 @@ pub fn build_road_network(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-) {
+) -> Entity {
     let mut position_attributes: Vec<[f32; 3]> = Vec::new();
     let mut normal_attributes: Vec<[f32; 3]> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
 
-    web_sys::console::log_1(&JsValue::from(String::from("Will spawn one segment")));
-
-    for (index, segment) in road_network.road_segments.iter().enumerate() {
+    for (index, segment_data) in road_network.road_segments.iter().enumerate() {
         let i: u32 = index as u32;
-        let a: Vec3 = segment.a;
-        let b: Vec3 = segment.b;
+        let a: Vec3 = segment_data.a;
+        let b: Vec3 = segment_data.b;
+        let segment: Vec3 = b - a;
+        let up: Vec3 = segment_data.up;
+        let right: Vec3 = segment.cross(up).normalize();
+        let left: Vec3 = -right.normalize();
 
+        //
+        // p3                         p4
+        //  +--------------------------+               -> b
+        //  |            |             |
+        //  |            |             |
+        //  |            |             |
+        //  +--------------------------+               ->  a
+        //  p1         0,0,0           p2
+        //
+        //      <-------- left
+        //         right    --------->
+        //
 
-        web_sys::console::log_1(&JsValue::from(String::from("Will spawn one segment")));
+        let p1: Vec3 = a + left;
+        let p2: Vec3 = a + right;
+        let p3: Vec3 = b + left;
+        let p4: Vec3 = b + right;
 
-        let p1: [f32; 3] = [a.x + 1.0, a.y + 1.0, a.z + 1.0];
-        let p2: [f32; 3] = [a.x + 0.0, a.y + 2.0, a.z + 1.0];
-        let p3: [f32; 3] = [a.x + 1.0, a.y + 2.0, a.z + 0.0];
-        position_attributes.push(p1);
-        position_attributes.push(p2);
-        position_attributes.push(p3);
+        position_attributes.push(p1.into());
+        position_attributes.push(p2.into());
+        position_attributes.push(p3.into());
+        position_attributes.push(p4.into());
 
-        normal_attributes.push(face_normal(p1, p2, p3));
-        normal_attributes.push(face_normal(p1, p2, p3));
-        normal_attributes.push(face_normal(p1, p2, p3));
+        let n1:  [f32; 3] = face_normal(p1.into(), p2.into(), p3.into());
+        normal_attributes.push(n1);
+        normal_attributes.push(n1);
+        normal_attributes.push(n1);
+        normal_attributes.push(n1);
 
-        indices.push(0 + i * 3);
-        indices.push(2 + i * 3);
-        indices.push(1 + i * 3);
+        indices.push(0 + i * 4);
+        indices.push(1 + i * 4);
+        indices.push(2 + i * 4);
+
+        indices.push(2 + i * 4);
+        indices.push(1 + i * 4);
+        indices.push(3 + i * 4);
     }
 
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
@@ -65,10 +88,9 @@ pub fn build_road_network(
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normal_attributes);
     mesh.set_indices(Some(Indices::U32(indices)));
 
-    commands.spawn_bundle(PbrBundle {
+    return commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(mesh),
         material: materials.add(Color::rgb(0.9, 0.5, 0.3).into()),
         ..default()
-    });
-
+    }).id();
 }

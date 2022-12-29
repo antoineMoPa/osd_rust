@@ -26,6 +26,7 @@ struct Game {
     camera_target: CameraTarget,
     camera: Option<Entity>,
     road_network: RoadNetwork,
+    road_network_entity: Option<Entity>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -134,7 +135,7 @@ fn road_network_load_check(
     let serialized_road_data: String = windowmailer::read_message(String::from(ROAD_NETWORK_DATA_CHANNEL));
     game.road_network = serde_json::from_str(&serialized_road_data).unwrap();
 
-    build_road_network(&game.road_network, commands, meshes, materials);
+    refresh_road_network(game, meshes, materials, commands);
 
     road_network_loading_state.set(RoadNetworkLoadingState::Loaded);
 }
@@ -261,10 +262,31 @@ fn keyboard_input_system(
     }
 }
 
+fn refresh_road_network(
+    mut game: ResMut<Game>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut commands: Commands,
+) {
+    // destroy previous meshes if they exist
+    match game.road_network_entity {
+        Some(entity) => {
+            commands.entity(entity).despawn();
+        },
+        _ => {}
+    };
+
+    game.road_network_entity = Some(build_road_network(&game.road_network, commands, meshes, materials));
+
+}
+
 fn road_network_creation_system(
     mut transforms: Query<&mut Transform>,
     keyboard_input: Res<Input<KeyCode>>,
     mut game: ResMut<Game>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut commands: Commands,
 ) {
     if keyboard_input.just_released(KeyCode::E) {
         let entity = match game.player_car {
@@ -293,9 +315,12 @@ fn road_network_creation_system(
 
         game.road_network.last_position = Some(current_point.clone());
 
-        let segment = Segment { a: last_position.clone(), b: current_point };
+        let segment = Segment { a: last_position.clone(), b: current_point, up: transform.up() };
 
         game.road_network.road_segments.push(segment);
+        refresh_road_network(game, meshes, materials, commands);
+
+        return;
     }
 
     // Output/Dump road network
