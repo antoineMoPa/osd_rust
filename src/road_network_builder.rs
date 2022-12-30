@@ -35,16 +35,31 @@ pub fn build_road_network(
     let mut position_attributes: Vec<[f32; 3]> = Vec::new();
     let mut normal_attributes: Vec<[f32; 3]> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
+    let len: usize = road_network.road_segments.len();
 
     for (index, segment_data) in road_network.road_segments.iter().enumerate() {
         let i: u32 = index as u32;
         let a: Vec3 = segment_data.a;
         let b: Vec3 = segment_data.b;
+
+
         let segment: Vec3 = b - a;
         let up: Vec3 = segment_data.up;
         let right: Vec3 = segment.cross(up).normalize();
         let left: Vec3 = -right.normalize();
+        let mut next_right = right;
+        let mut next_left = left;
 
+        if index < len - 1 {
+            let next_segment_data = &road_network.road_segments[index + 1];
+            let next_segment: Vec3 = next_segment_data.b - next_segment_data.a;
+            next_right = next_segment.cross(next_segment_data.up).normalize();
+            next_left = -next_right.normalize();
+        }
+
+        //
+        //       next right --------->
+        //    <---------- next_left
         //
         // p3                         p4
         //  +--------------------------+               -> b
@@ -58,10 +73,10 @@ pub fn build_road_network(
         //         right    --------->
         //
 
-        let p1: Vec3 = a + left;
-        let p2: Vec3 = a + right;
-        let p3: Vec3 = b + left;
-        let p4: Vec3 = b + right;
+        let p1: Vec3 = a + left * 1.5;
+        let p2: Vec3 = a + right * 1.5;
+        let p3: Vec3 = b + next_left * 1.5;
+        let p4: Vec3 = b + next_right * 1.5;
 
         position_attributes.push(p1.into());
         position_attributes.push(p2.into());
