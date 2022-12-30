@@ -2,32 +2,18 @@ use std::{
     ops::Mul,
     str
 };
-use serde::{Serialize, Deserialize};
 use serde_json;
 
 use bevy::{
     input::{keyboard::KeyCode, Input},
     pbr::DirectionalLightShadowMap,
-    prelude::*, render::{render_resource::PrimitiveTopology, mesh::Indices},
+    prelude::*
 };
 use bevy_rapier3d::prelude::*;
 
-#[derive(Default, Serialize, Deserialize, Debug)]
-struct CameraTarget {
-    position: Option<Vec3>,
-    up: Option<Vec3>,
-    look_at: Option<Vec3>,
-}
 
-
-#[derive(Default)]
-struct Game {
-    player_car: Option<Entity>,
-    camera_target: CameraTarget,
-    camera: Option<Entity>,
-    road_network: RoadNetwork,
-    road_network_entity: Option<Entity>,
-}
+mod game;
+use game::Game;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum RoadNetworkLoadingState {
@@ -46,8 +32,9 @@ use js_sys::Uint8Array;
 
 mod windowmailer;
 mod road_network_builder;
+mod road_systems;
 
-use road_network_builder::*;
+use road_systems::*;
 
 const ROAD_NETWORK_DATA_CHANNEL: &str = "ROAD_NETWORK_DATA";
 
@@ -262,81 +249,6 @@ fn keyboard_input_system(
     }
 }
 
-fn refresh_road_network(
-    mut game: ResMut<Game>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut commands: Commands,
-) {
-    // destroy previous meshes if they exist
-    match game.road_network_entity {
-        Some(entity) => {
-            commands.entity(entity).despawn();
-        },
-        _ => {}
-    };
-
-    game.road_network_entity = Some(build_road_network(&game.road_network, commands, meshes, materials));
-
-}
-
-fn road_network_creation_system(
-    mut transforms: Query<&mut Transform>,
-    keyboard_input: Res<Input<KeyCode>>,
-    mut game: ResMut<Game>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut commands: Commands,
-) {
-    if keyboard_input.just_released(KeyCode::E) {
-        let entity = match game.player_car {
-                Some(entity) => entity,
-                _ => {
-                    return;
-                }
-            };
-
-        let transform = match transforms.get_mut(entity) {
-            Ok(transform) => transform,
-            _ => {
-                return;
-            }
-        };
-        let translation = transform.translation;
-        let current_point = Vec3 { x: translation.x, y: translation.y, z: translation.z };
-
-        let last_position = match game.road_network.last_position {
-            Some(position) => position,
-            _ => {
-                game.road_network.last_position = Some(current_point.clone());
-                return;
-            }
-        };
-
-        game.road_network.last_position = Some(current_point.clone());
-
-        let segment = Segment { a: last_position.clone(), b: current_point, up: transform.up() };
-
-        game.road_network.road_segments.push(segment);
-        refresh_road_network(game, meshes, materials, commands);
-
-        return;
-    }
-
-    // Output/Dump road network
-    if keyboard_input.just_released(KeyCode::O) {
-        let serialized = serde_json::to_string(&game.road_network).unwrap();
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            web_sys::console::log_1(&serialized.into());
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            println!("serialized = {}", serialized);
-        }
-    }
-}
 
 fn camera_target_car_system(
     mut transforms: Query<&mut Transform>,
