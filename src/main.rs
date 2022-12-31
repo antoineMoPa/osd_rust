@@ -58,6 +58,7 @@ fn main() {
         .add_system(camera_target_car_system)
         .add_system(camera_target_target_system)
         .add_system(road_network_creation_system)
+        .add_system(road_physics_system)
         .add_startup_system(load_road_network)
         .add_system_set(
             SystemSet::on_update(RoadNetworkLoadingState::Loading)
@@ -281,6 +282,7 @@ fn camera_target_target_system(
     let camera_target_position = match game.camera_target.position { Some(x) => x, _ => { return; } };
     let camera_target_up = match game.camera_target.up { Some(x) => x, _ => { return; } };
 
+    // TODO: smooth camera transform.
     camera_transform.look_at(camera_target_look_at, camera_target_up);
     camera_transform.translation = camera_target_position;
 }
