@@ -52,7 +52,7 @@ pub fn road_network_creation_system(
             }
         };
         let translation = transform.translation;
-        let current_point = Vec3 { x: translation.x, y: translation.y, z: translation.z };
+        let current_point = translation.clone();
 
         let last_position = match game.road_network.last_position {
             Some(position) => position,
