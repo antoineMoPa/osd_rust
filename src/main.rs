@@ -298,7 +298,7 @@ fn setup_dynamic_objects(
         .insert(Collider::cuboid(100.0, 0.1, 100.0))
         .insert_bundle(TransformBundle::from(Transform::from_xyz(0.0, -2.0, 0.0)));
 
-    let my_gltf = asset_server.load("model.glb#Scene0");
+    let my_gltf = asset_server.load("car_0001/model.glb#Scene0");
 
     game.player_car =
         Some(

@@ -135,13 +135,13 @@ pub fn road_physics_system(
         };
     let vehicle_position = vehicle_transform.translation;
 
+    let mut closest_segment: Option<Vec3> = None;
     let mut closest_segment_index: Option<usize> = None;
     let mut closest_point: Option<Vec3> = None;
     let mut closest_dist: Option<f32> = None;
 
     // find close segments to vehicle (dumb, not efficient)
     for (index, segment_data) in game.road_network.road_segments.iter().enumerate() {
-        let i: u32 = index as u32;
         let p1: Vec3 = segment_data.a;
         let p2: Vec3 = segment_data.b;
         let closest_point_to_segment: Option<Vec3> = find_closest_point_on_segment_capped(p1, p2, vehicle_transform.translation);
@@ -172,6 +172,7 @@ pub fn road_physics_system(
                 closest_dist = Some(dist);
                 closest_point = Some(closest_point_to_segment);
                 closest_segment_index = Some(index);
+                closest_segment = Some(segment_data.b - segment_data.a);
             },
             _ => {}
         }
@@ -182,6 +183,8 @@ pub fn road_physics_system(
         Some(closest_point) => {
             let force_direction = closest_point - vehicle_position;
             ext_force.force += force_direction * 20.0;
+            let delta = closest_segment.unwrap().normalize().cross(vehicle_transform.forward());
+            ext_force.torque -= delta * 60.0;
         },
         _ => {}
     }

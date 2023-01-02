@@ -3,6 +3,6 @@
     "isStaticObject": false,
     "hasCollisions": true,
     "isVehicle": true,
-    "acceleration": 3.5,
-    "mass": 1000
+    "mass": 1000,
+    "acceleration": 10.0
 }
