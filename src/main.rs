@@ -1,6 +1,6 @@
 use std::{
     ops::Mul,
-    str
+    str, fs::read_to_string
 };
 use serde_json;
 
@@ -39,6 +39,11 @@ use road_systems::*;
 const ROAD_NETWORK_DATA_CHANNEL: &str = "ROAD_NETWORK_DATA";
 
 fn main() {
+    #[cfg(not(target_arch = "wasm32"))]
+    let default_road_state = RoadNetworkLoadingState::Loaded;
+    #[cfg(target_arch = "wasm32")]
+    let default_road_state = RoadNetworkLoadingState::Loading;
+
     App::new()
         .init_resource::<Game>()
         .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
@@ -47,7 +52,7 @@ fn main() {
             color: Color::rgb(0.6, 0.4, 0.5),
             brightness: 0.6,
         })
-        .add_state(RoadNetworkLoadingState::Loading)
+        .add_state(default_road_state)
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
@@ -88,24 +93,35 @@ fn load_road_network(
     asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut road_network_loading_state: ResMut<State<RoadNetworkLoadingState>>
 ) {
-    let load_assets = async move {
-        let window = web_sys::window().unwrap();
-        let url = String::from("assets/road_network.json");
-        let future = JsFuture::from(window.fetch_with_str(&url)).await;
+    #[cfg(target_arch = "wasm32")]
+    {
+        let load_assets = async move {
+            let window = web_sys::window().unwrap();
+            let url = String::from("assets/road_network.json");
+            let future = JsFuture::from(window.fetch_with_str(&url)).await;
 
-        match future {
-            Ok(future) => {
-                let string: String = response_to_string(future).await.unwrap();
-                windowmailer::send_message(String::from(ROAD_NETWORK_DATA_CHANNEL), string);
-            }
-            _ => {
-                web_sys::console::log_1(&JsValue::from(String::from("Error in fetch")));
-            }
-        }
-    };
+            match future {
+                Ok(future) => {
+                    let string: String = response_to_string(future).await.unwrap();
+                    windowmailer::send_message(String::from(ROAD_NETWORK_DATA_CHANNEL), string);
+                }
+                _ => {
 
-    wasm_bindgen_futures::spawn_local(load_assets);
+                    web_sys::console::log_1(&JsValue::from(String::from("Error in fetch")));
+                }
+            }
+        };
+
+        wasm_bindgen_futures::spawn_local(load_assets);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let serialized_road_data: String = read_to_string("assets/road_network.json").unwrap();
+        game.road_network = serde_json::from_str(&serialized_road_data).unwrap();
+        refresh_road_network(game, meshes, materials, commands);
+    }
 }
 
 // Waits for roads to load
@@ -117,6 +133,10 @@ fn road_network_load_check(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut road_network_loading_state: ResMut<State<RoadNetworkLoadingState>>
 ) {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        return;
+    }
     if windowmailer::message_count(String::from(ROAD_NETWORK_DATA_CHANNEL)) <= 0 {
         return;
     }
