@@ -13,9 +13,16 @@ pub struct Segment {
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
+pub struct Macro {
+    pub road_segments: Vec<Segment>,
+}
+
+
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct RoadNetwork {
     pub last_position: Option<Vec3>,
-    pub road_segments: Vec<Segment>
+    pub road_segments: Vec<Segment>,
+    pub macros: Vec<Macro>,
 }
 
 /// Compute a triangle's normal

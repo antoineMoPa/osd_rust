@@ -2,11 +2,11 @@ use std::str;
 
 use bevy::{
     input::{keyboard::KeyCode, Input},
-    prelude::*,
+    prelude::*, math::{Vec4Swizzles, Vec3Swizzles},
 };
 
 
-use crate::{game::Game, road_network_builder::build_road_network};
+use crate::{game::Game, road_network_builder::*};
 use crate::road_network_builder::Segment;
 use bevy_rapier3d::prelude::*;
 
@@ -38,13 +38,14 @@ pub fn road_network_creation_system(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut commands: Commands,
 ) {
+    // E: Insert road segment. (E because it is close to WASD)
     if keyboard_input.just_released(KeyCode::E) {
         let entity = match game.player_car {
-                Some(entity) => entity,
-                _ => {
-                    return;
-                }
-            };
+            Some(entity) => entity,
+            _ => {
+                return;
+            }
+        };
 
         let transform = match transforms.get_mut(entity) {
             Ok(transform) => transform,
@@ -73,7 +74,7 @@ pub fn road_network_creation_system(
         return;
     }
 
-    // Output/Dump road network
+    // O: Output/Dump road network
     if keyboard_input.just_released(KeyCode::O) {
         let serialized = serde_json::to_string(&game.road_network).unwrap();
 
@@ -85,6 +86,74 @@ pub fn road_network_creation_system(
         {
             println!("serialized = {}", serialized);
         }
+    }
+
+    // X: Delete everything and go back to 0,0
+    if keyboard_input.just_released(KeyCode::X) {
+        game.road_network.road_segments.clear();
+        game.road_network.last_position = Some(Vec3::ZERO);
+
+        let entity = match game.player_car {
+            Some(entity) => entity,
+            _ => {
+                return;
+            }
+        };
+
+        let mut transform = match transforms.get_mut(entity) {
+            Ok(transform) => transform,
+            _ => {
+                return;
+            }
+        };
+
+        transform.translation = Vec3::ZERO;
+
+        refresh_road_network(game, meshes, materials, commands);
+    }
+
+    // R: Record current state as macro
+    else if keyboard_input.just_released(KeyCode::R) {
+        let mut m: Macro =  Macro::default();
+        m.road_segments = game.road_network.road_segments.clone();
+        game.road_network.macros.push(m);
+    }
+
+    // P: Play macro
+    else if keyboard_input.just_released(KeyCode::P) {
+        if game.road_network.macros.len() <= 0 {
+            return;
+        }
+        let mut segments = game.road_network.macros[0].road_segments.clone();
+
+        let entity = match game.player_car {
+            Some(entity) => entity,
+            _ => {
+                return;
+            }
+        };
+
+        let mut transform = match transforms.get_mut(entity) {
+            Ok(transform) => transform,
+            _ => {
+                return;
+            }
+        };
+
+        // Apply vehicle transform to macro
+        for mut segment in segments {
+            let t: Vec3 = transform.translation;
+            let r: Quat = transform.rotation;
+            let a = r * segment.a + t;
+            let b = r * segment.b + t;
+            let up = r * segment.up;
+            game.road_network.road_segments.push(Segment {
+                a: a,
+                b: b,
+                up: up
+            });
+        }
+        refresh_road_network(game, meshes, materials, commands);
     }
 }
 
