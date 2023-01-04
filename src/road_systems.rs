@@ -1,8 +1,6 @@
-use std::str;
-
 use bevy::{
     input::{keyboard::KeyCode, Input},
-    prelude::*, math::{Vec4Swizzles, Vec3Swizzles},
+    prelude::*,
 };
 
 
@@ -10,12 +8,10 @@ use crate::{game::Game, road_network_builder::*};
 use crate::road_network_builder::Segment;
 use bevy_rapier3d::prelude::*;
 
-const ROAD_NETWORK_DATA_CHANNEL: &str = "ROAD_NETWORK_DATA";
-
 pub fn refresh_road_network(
     mut game: ResMut<Game>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    meshes: ResMut<Assets<Mesh>>,
+    materials: ResMut<Assets<StandardMaterial>>,
     mut commands: Commands,
 ) {
     // destroy previous meshes if they exist
@@ -34,26 +30,35 @@ pub fn road_network_creation_system(
     mut transforms: Query<&mut Transform>,
     keyboard_input: Res<Input<KeyCode>>,
     mut game: ResMut<Game>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut commands: Commands,
+    meshes: ResMut<Assets<Mesh>>,
+    materials: ResMut<Assets<StandardMaterial>>,
+    commands: Commands,
+    mut ext_forces: Query<&mut ExternalForce>,
 ) {
+    let vehicle_entity = match game.player_car {
+        Some(entity) => entity,
+        _ => {
+            return;
+        }
+    };
+
+    let mut ext_force = match ext_forces.get_mut(vehicle_entity) {
+        Ok(ext_force) => ext_force,
+        _ => {
+            return;
+        }
+    };
+
+    let mut vehicle_transform = match transforms.get_mut(vehicle_entity) {
+        Ok(vehicle_transform) => vehicle_transform,
+        _ => {
+            return;
+        }
+    };
+
     // E: Insert road segment. (E because it is close to WASD)
     if keyboard_input.just_released(KeyCode::E) {
-        let entity = match game.player_car {
-            Some(entity) => entity,
-            _ => {
-                return;
-            }
-        };
-
-        let transform = match transforms.get_mut(entity) {
-            Ok(transform) => transform,
-            _ => {
-                return;
-            }
-        };
-        let translation = transform.translation;
+        let translation = vehicle_transform.translation;
         let current_point = translation.clone();
 
         let last_position = match game.road_network.last_position {
@@ -66,7 +71,7 @@ pub fn road_network_creation_system(
 
         game.road_network.last_position = Some(current_point.clone());
 
-        let segment = Segment { a: last_position.clone(), b: current_point, up: transform.up() };
+        let segment = Segment { a: last_position.clone(), b: current_point, up: vehicle_transform.up() };
 
         game.road_network.road_segments.push(segment);
         refresh_road_network(game, meshes, materials, commands);
@@ -93,21 +98,9 @@ pub fn road_network_creation_system(
         game.road_network.road_segments.clear();
         game.road_network.last_position = Some(Vec3::ZERO);
 
-        let entity = match game.player_car {
-            Some(entity) => entity,
-            _ => {
-                return;
-            }
-        };
-
-        let mut transform = match transforms.get_mut(entity) {
-            Ok(transform) => transform,
-            _ => {
-                return;
-            }
-        };
-
-        transform.translation = Vec3::ZERO;
+        vehicle_transform.translation = Vec3::ZERO;
+        ext_force.force = Vec3::ZERO;
+        ext_force.torque = Vec3::ZERO;
 
         refresh_road_network(game, meshes, materials, commands);
     }
@@ -124,26 +117,11 @@ pub fn road_network_creation_system(
         if game.road_network.macros.len() <= 0 {
             return;
         }
-        let mut segments = game.road_network.macros[0].road_segments.clone();
+        let segments = game.road_network.macros[0].road_segments.clone();
 
-        let entity = match game.player_car {
-            Some(entity) => entity,
-            _ => {
-                return;
-            }
-        };
-
-        let mut transform = match transforms.get_mut(entity) {
-            Ok(transform) => transform,
-            _ => {
-                return;
-            }
-        };
-
-        // Apply vehicle transform to macro
-        for mut segment in segments {
-            let t: Vec3 = transform.translation;
-            let r: Quat = transform.rotation;
+        for segment in segments {
+            let t: Vec3 = vehicle_transform.translation;
+            let r: Quat = vehicle_transform.rotation;
             let a = r * segment.a + t;
             let b = r * segment.b + t;
             let up = r * segment.up;
@@ -176,10 +154,7 @@ fn find_closest_point_on_segment_capped(segment_a: Vec3, segment_b: Vec3, p: Vec
 
 pub fn road_physics_system(
     mut transforms: Query<&mut Transform>,
-    mut game: ResMut<Game>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut commands: Commands,
+    game: ResMut<Game>,
     mut ext_forces: Query<&mut ExternalForce>,
 ) {
     let vehicle_entity = match game.player_car {

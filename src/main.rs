@@ -1,7 +1,12 @@
 use std::{
     ops::Mul,
-    str, fs::read_to_string
+    str,
 };
+
+// This is only for native builds
+#[allow(unused_imports)]
+use std::fs::read_to_string;
+
 use serde_json;
 
 use bevy::{
@@ -36,6 +41,10 @@ mod road_systems;
 
 use road_systems::*;
 
+
+
+// The code here is not used in native builds
+#[allow(dead_code)]
 const ROAD_NETWORK_DATA_CHANNEL: &str = "ROAD_NETWORK_DATA";
 
 fn main() {
@@ -72,6 +81,9 @@ fn main() {
         .run();
 }
 
+
+// The code here is not used in native builds
+#[allow(dead_code)]
 async fn response_to_string(message: JsValue) -> Result<String, JsValue>{
     let response: Response = message.dyn_into()?;
     let stream: ReadableStream = response.body().unwrap();
@@ -88,12 +100,10 @@ async fn response_to_string(message: JsValue) -> Result<String, JsValue>{
 
 
 fn load_road_network(
-    mut commands: Commands,
-    mut game: ResMut<Game>,
-    asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut road_network_loading_state: ResMut<State<RoadNetworkLoadingState>>
+    _commands: Commands,
+    mut _game: ResMut<Game>,
+    _meshes: ResMut<Assets<Mesh>>,
+    _materials: ResMut<Assets<StandardMaterial>>,
 ) {
     #[cfg(target_arch = "wasm32")]
     {
@@ -119,33 +129,33 @@ fn load_road_network(
     #[cfg(not(target_arch = "wasm32"))]
     {
         let serialized_road_data: String = read_to_string("assets/road_network.json").unwrap();
-        game.road_network = serde_json::from_str(&serialized_road_data).unwrap();
-        refresh_road_network(game, meshes, materials, commands);
+        _game.road_network = serde_json::from_str(&serialized_road_data).unwrap();
+        refresh_road_network(_game, _meshes, _materials, _commands);
     }
 }
 
+
+#[allow(unused_mut, unused_variables)]
 // Waits for roads to load
 fn road_network_load_check(
-    mut commands: Commands,
+    commands: Commands,
     mut game: ResMut<Game>,
-    asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    _meshes: ResMut<Assets<Mesh>>,
+    _materials: ResMut<Assets<StandardMaterial>>,
     mut road_network_loading_state: ResMut<State<RoadNetworkLoadingState>>
 ) {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(target_arch = "wasm32")]
     {
-        return;
-    }
-    if windowmailer::message_count(String::from(ROAD_NETWORK_DATA_CHANNEL)) <= 0 {
-        return;
-    }
-    let serialized_road_data: String = windowmailer::read_message(String::from(ROAD_NETWORK_DATA_CHANNEL));
-    game.road_network = serde_json::from_str(&serialized_road_data).unwrap();
+        if windowmailer::message_count(String::from(ROAD_NETWORK_DATA_CHANNEL)) <= 0 {
+            return;
+        }
+        let serialized_road_data: String = windowmailer::read_message(String::from(ROAD_NETWORK_DATA_CHANNEL));
+        game.road_network = serde_json::from_str(&serialized_road_data).unwrap();
 
-    refresh_road_network(game, meshes, materials, commands);
+        refresh_road_network(game, _meshes, _materials, commands);
 
-    road_network_loading_state.set(RoadNetworkLoadingState::Loaded);
+        road_network_loading_state.set(RoadNetworkLoadingState::Loaded).unwrap();
+    }
 }
 
 

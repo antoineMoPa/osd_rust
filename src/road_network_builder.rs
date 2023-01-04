@@ -31,8 +31,6 @@ fn face_normal(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> [f32; 3] {
     (b - a).cross(c - a).normalize().into()
 }
 
-use wasm_bindgen::{prelude::*};
-
 pub fn build_road_network(
     road_network: &RoadNetwork,
     mut commands: Commands,

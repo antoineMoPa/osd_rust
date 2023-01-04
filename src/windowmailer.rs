@@ -6,6 +6,10 @@ use js_sys::Array;
 
 const MAIL_VAR: &str = "WINDOW_MAILER_MAILBOX";
 
+
+// The code here is not used in native builds
+#[allow(dead_code)]
+
 /// Writes a message in the specified channel.
 ///
 /// Example:
@@ -23,7 +27,7 @@ pub fn send_message(_channel_name: String, message: String) {
     // Create the mail-storing map if needed
     if !js_sys::Reflect::has(&window, &JsValue::from(MAIL_VAR)).unwrap() {
         let map: Map = Map::new();
-        js_sys::Reflect::set(&window, &JsValue::from(MAIL_VAR), &map);
+        js_sys::Reflect::set(&window, &JsValue::from(MAIL_VAR), &map).unwrap();
     }
 
     let map: Map = js_sys::Reflect::get(&window, &JsValue::from(MAIL_VAR)).unwrap().into();
@@ -37,6 +41,9 @@ pub fn send_message(_channel_name: String, message: String) {
     let arr: Array = map.get(&channel_name).into();
     arr.push(&JsValue::from(message));
 }
+
+// The code here is not used in native builds
+#[allow(dead_code)]
 
 /// Get the amount of message in a given channel.
 pub fn message_count(_channel_name: String) -> u32 {
@@ -57,6 +64,9 @@ pub fn message_count(_channel_name: String) -> u32 {
 
     return arr.length();
 }
+
+// The code here is not used in native builds
+#[allow(dead_code)]
 
 /// Read the first inserted message.
 pub fn read_message(_channel_name: String) -> String {
