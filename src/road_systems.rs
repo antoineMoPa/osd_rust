@@ -28,15 +28,15 @@ pub fn refresh_road_network(
 
 pub fn road_network_creation_system(
     mut transforms: Query<&mut Transform>,
+    mut ext_forces: Query<&mut ExternalForce>,
     keyboard_input: Res<Input<KeyCode>>,
     mut game: ResMut<Game>,
     meshes: ResMut<Assets<Mesh>>,
     materials: ResMut<Assets<StandardMaterial>>,
     commands: Commands,
-    mut ext_forces: Query<&mut ExternalForce>,
 ) {
     let vehicle_entity = match game.player_car {
-        Some(entity) => entity,
+        Some(vehicle_entity) => vehicle_entity,
         _ => {
             return;
         }
@@ -101,7 +101,6 @@ pub fn road_network_creation_system(
         vehicle_transform.translation = Vec3::ZERO;
         ext_force.force = Vec3::ZERO;
         ext_force.torque = Vec3::ZERO;
-
         refresh_road_network(game, meshes, materials, commands);
     }
 
@@ -118,8 +117,7 @@ pub fn road_network_creation_system(
             return;
         }
         let segments = game.road_network.macros[0].road_segments.clone();
-
-        for segment in segments {
+        for segment in &segments {
             let t: Vec3 = vehicle_transform.translation;
             let r: Quat = vehicle_transform.rotation;
             let a = r * segment.a + t;
@@ -131,6 +129,13 @@ pub fn road_network_creation_system(
                 up: up
             });
         }
+
+        // move vehicle to last point
+        let last_segment = segments.last().unwrap();
+        vehicle_transform.translation = last_segment.b;
+        let t = vehicle_transform.translation;
+        vehicle_transform.look_at(t + (last_segment.b - last_segment.a).normalize(), last_segment.up);
+
         refresh_road_network(game, meshes, materials, commands);
     }
 }
@@ -225,6 +230,12 @@ pub fn road_physics_system(
 
     match closest_point {
         Some(closest_point) => {
+
+            // Too far: outside of road force field.
+            if (closest_point - vehicle_position).length() > 4.0 {
+                return;
+            }
+
             let force_direction = closest_point - vehicle_position;
             ext_force.force += force_direction * 20.0;
             let delta = closest_segment.unwrap().normalize().cross(vehicle_transform.forward());
