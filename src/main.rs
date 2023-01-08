@@ -55,10 +55,10 @@ fn main() {
 
     App::new()
         .init_resource::<Game>()
-        .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
+        .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
         .insert_resource(DirectionalLightShadowMap { size: 2048 })
         .insert_resource(AmbientLight {
-            color: Color::rgb(0.6, 0.4, 0.5),
+            color: Color::rgb(1.0, 0.8, 0.9),
             brightness: 0.6,
         })
         .add_state(default_road_state)
@@ -73,6 +73,7 @@ fn main() {
         .add_system(camera_target_target_system)
         .add_system(road_network_creation_system)
         .add_system(road_physics_system)
+        .add_system(reset_forces_system)
         .add_startup_system(load_road_network)
         .add_system_set(
             SystemSet::on_update(RoadNetworkLoadingState::Loading)
@@ -211,6 +212,27 @@ fn setup_graphics(
     });
 }
 
+fn reset_forces_system(
+    game: ResMut<Game>,
+    mut ext_forces: Query<&mut ExternalForce>,
+) {
+    let entity = match game.player_car {
+        Some(entity) => entity,
+        _ => {
+            return;
+        }
+    };
+    let mut ext_force = match ext_forces.get_mut(entity) {
+        Ok(ext_force) => ext_force,
+        _ => {
+            return;
+        }
+    };
+
+    ext_force.force = Vec3::ZERO;
+    ext_force.torque = Vec3::ZERO;
+}
+
 fn keyboard_input_system(
     keyboard_input: Res<Input<KeyCode>>,
     mut transforms: Query<&mut Transform>,
@@ -239,9 +261,6 @@ fn keyboard_input_system(
     // Apply forces
     let forward_speed: f32 = 100.0;
     let backward_speed: f32 = -40.0;
-
-    ext_force.force = Vec3::ZERO;
-    ext_force.torque = Vec3::ZERO;
 
     if keyboard_input.pressed(KeyCode::W) {
         ext_force.force = transform.forward().mul(Vec3 { x: forward_speed, y: forward_speed, z: forward_speed });

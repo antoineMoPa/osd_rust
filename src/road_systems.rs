@@ -116,7 +116,7 @@ pub fn road_network_creation_system(
         if game.road_network.macros.len() <= 0 {
             return;
         }
-        let segments = game.road_network.macros[0].road_segments.clone();
+        let segments = game.road_network.macros.last().unwrap().road_segments.clone();
         for segment in &segments {
             let t: Vec3 = vehicle_transform.translation;
             let r: Quat = vehicle_transform.rotation;
@@ -131,7 +131,7 @@ pub fn road_network_creation_system(
         }
 
         // move vehicle to last point
-        let last_segment = segments.last().unwrap();
+        let last_segment = game.road_network.road_segments.last().unwrap();
         vehicle_transform.translation = last_segment.b;
         let t = vehicle_transform.translation;
         vehicle_transform.look_at(t + (last_segment.b - last_segment.a).normalize(), last_segment.up);
@@ -189,10 +189,13 @@ pub fn road_physics_system(
     let mut closest_point: Option<Vec3> = None;
     let mut closest_dist: Option<f32> = None;
 
+    // In this game, vehicles float above roads
+    let offset: Vec3 = Vec3::Y * 1.5;
+
     // find close segments to vehicle (dumb, not efficient)
     for (index, segment_data) in game.road_network.road_segments.iter().enumerate() {
-        let p1: Vec3 = segment_data.a;
-        let p2: Vec3 = segment_data.b;
+        let p1: Vec3 = segment_data.a + offset;
+        let p2: Vec3 = segment_data.b + offset;
         let closest_point_to_segment: Option<Vec3> = find_closest_point_on_segment_capped(p1, p2, vehicle_transform.translation);
 
 
@@ -232,14 +235,21 @@ pub fn road_physics_system(
         Some(closest_point) => {
 
             // Too far: outside of road force field.
-            if (closest_point - vehicle_position).length() > 4.0 {
+            if closest_dist.unwrap() > 10.0 {
                 return;
             }
 
             let force_direction = closest_point - vehicle_position;
             ext_force.force += force_direction * 20.0;
-            let delta = closest_segment.unwrap().normalize().cross(vehicle_transform.forward());
-            ext_force.torque -= delta * 60.0;
+
+            match closest_segment {
+                Some(closest_segment) => {
+                    let delta = closest_segment.normalize().cross(vehicle_transform.forward());
+                    ext_force.torque -= delta * 60.0;
+                }
+                _ => {
+                }
+            };
         },
         _ => {}
     }

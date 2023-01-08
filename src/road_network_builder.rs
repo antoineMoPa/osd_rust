@@ -51,7 +51,7 @@ pub fn build_road_network(
         let segment: Vec3 = b - a;
         let up: Vec3 = segment_data.up;
         let right: Vec3 = segment.cross(up).normalize();
-        let left: Vec3 = -right.normalize();
+        let left: Vec3 = -right;
         let mut next_right = right;
         let mut next_left = left;
 
@@ -59,7 +59,7 @@ pub fn build_road_network(
             let next_segment_data = &road_network.road_segments[index + 1];
             let next_segment: Vec3 = next_segment_data.b - next_segment_data.a;
             next_right = next_segment.cross(next_segment_data.up).normalize();
-            next_left = -next_right.normalize();
+            next_left = -next_right;
         }
 
         //
@@ -108,9 +108,16 @@ pub fn build_road_network(
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normal_attributes);
     mesh.set_indices(Some(Indices::U32(indices)));
 
+    let material = materials.add(StandardMaterial {
+        base_color: Color::rgb(0.9, 0.5, 0.3),
+        double_sided: true,
+        cull_mode: None,
+        ..Default::default()
+    });
+
     return commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(mesh),
-        material: materials.add(Color::rgb(0.9, 0.5, 0.3).into()),
+        material: material,
         ..default()
     }).id();
 }
