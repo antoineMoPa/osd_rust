@@ -8,6 +8,12 @@ use crate::{game::Game, road_network_builder::*};
 use crate::road_network_builder::Segment;
 use bevy_rapier3d::prelude::*;
 
+#[derive(Component, Default)]
+pub struct VehiclePID {
+    pub last_error: Vec3,
+    pub last_correction: Vec3,
+}
+
 pub fn refresh_road_network(
     mut game: ResMut<Game>,
     meshes: ResMut<Assets<Mesh>>,
@@ -161,6 +167,9 @@ pub fn road_physics_system(
     mut transforms: Query<&mut Transform>,
     game: ResMut<Game>,
     mut ext_forces: Query<&mut ExternalForce>,
+    mut velocities: Query<&mut Velocity>,
+    mut pids: Query<&mut VehiclePID>,
+
 ) {
     let vehicle_entity = match game.player_car {
         Some(entity) => entity,
@@ -181,10 +190,15 @@ pub fn road_physics_system(
         _ => {
             return;
         }
-        };
+    };
     let vehicle_position = vehicle_transform.translation;
 
-    let mut closest_segment: Option<Vec3> = None;
+    struct ClosestPointInfo {
+        segment: Vec3,
+        up: Vec3,
+    }
+
+    let mut closest_segment: Option<ClosestPointInfo> = None;
     let mut closest_segment_index: Option<usize> = None;
     let mut closest_point: Option<Vec3> = None;
     let mut closest_dist: Option<f32> = None;
@@ -224,12 +238,24 @@ pub fn road_physics_system(
                 closest_dist = Some(dist);
                 closest_point = Some(closest_point_to_segment);
                 closest_segment_index = Some(index);
-                closest_segment = Some(segment_data.b - segment_data.a);
+                closest_segment = Some(ClosestPointInfo {
+                    segment: segment_data.b - segment_data.a,
+                    up: segment_data.up
+                });
             },
             _ => {}
         }
-
     }
+
+    let velocity = match velocities.get_mut(vehicle_entity) {
+        Ok(velocity) => velocity,
+        _ => return
+    };
+
+    let mut pid = match pids.get_mut(vehicle_entity) {
+        Ok(pid) => pid,
+        _ => return
+    };
 
     match closest_point {
         Some(closest_point) => {
@@ -244,8 +270,31 @@ pub fn road_physics_system(
 
             match closest_segment {
                 Some(closest_segment) => {
-                    let delta = closest_segment.normalize().cross(vehicle_transform.forward());
-                    ext_force.torque -= delta * 60.0;
+                    const P: f32 = 120.0;
+                    const D: f32 = 0.3;
+                    const I: f32 = -10.0;
+                    const SUB_TARGET_FRACTION: f32 = 0.8;
+
+                    // Make vehicle more aligned with road
+                    let delta_forward = -closest_segment.segment
+                        .normalize()
+                        .cross(vehicle_transform.forward())
+                        * SUB_TARGET_FRACTION;
+
+                    let delta_up = -closest_segment.up
+                        .normalize()
+                        .cross(vehicle_transform.up())
+                        * SUB_TARGET_FRACTION;
+
+                    let error = delta_forward + delta_up;
+                    let error_delta = error / pid.last_error;
+                    let correction = (delta_forward + delta_up) * P + velocity.angvel * I;
+
+                    ext_force.torque += correction + (1.0 / error_delta * correction) * D;
+
+
+                    pid.last_correction = correction;
+                    pid.last_error = error;
                 }
                 _ => {
                 }

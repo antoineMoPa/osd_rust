@@ -68,12 +68,15 @@ fn main() {
         .add_startup_system(setup_graphics)
         .add_startup_system(setup_dynamic_objects)
         .add_startup_system(setup_window_size)
-        .add_system(keyboard_input_system)
         .add_system(camera_target_car_system)
         .add_system(camera_target_target_system)
-        .add_system(road_network_creation_system)
-        .add_system(road_physics_system)
         .add_system(reset_forces_system)
+        .add_system(keyboard_input_system
+                    .after(reset_forces_system))
+        .add_system(road_network_creation_system
+                    .after(reset_forces_system))
+        .add_system(road_physics_system
+                    .after(reset_forces_system))
         .add_startup_system(load_road_network)
         .add_system_set(
             SystemSet::on_update(RoadNetworkLoadingState::Loading)
@@ -362,6 +365,11 @@ fn setup_dynamic_objects(
                 .insert(ColliderMassProperties::Density(0.04))
                 .insert(Friction::coefficient(0.0))
                 .insert(Damping { linear_damping: 0.8, angular_damping: 0.4 })
+                .insert(Velocity {
+                    linvel: Vec3::new(0.0, 0.0, 0.0),
+                    angvel: Vec3::new(0.0, 0.0, 0.0),
+                })
+                .insert(VehiclePID::default())
                 .insert(ExternalForce {
                     force: Vec3::new(0.0, 0.0, 0.0),
                     torque: Vec3::new(0.0, 0.0, 0.0),
