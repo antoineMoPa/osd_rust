@@ -8,10 +8,41 @@ use crate::{game::Game, road_network_builder::*};
 use crate::road_network_builder::Segment;
 use bevy_rapier3d::prelude::*;
 
-#[derive(Component, Default)]
-pub struct VehiclePID {
+#[derive(Default)]
+pub struct Controllable {
     pub last_error: Vec3,
     pub last_correction: Vec3,
+}
+
+
+// There are probably conceptual errors in there, but it works.
+// This is a mechanism similar to a PID.
+// P: adjustement of correction based on current position difference
+// R: adjustement of correction based on rate of change
+// D: adjustement of correction based on current variation of error
+fn apply_pid_control(
+    c: &mut Controllable,
+    delta: Vec3,
+    rate_of_change: Vec3,// -> velocity.angvel
+    p: f32,
+    r: f32, // (old i)
+    d: f32
+) -> Vec3 {
+    let error: Vec3 = delta;
+    let error_delta: Vec3 = error / c.last_error;
+    let correction: Vec3 = delta * p + rate_of_change * r;
+    let applied_control: Vec3 = correction + (1.0 / error_delta * correction) * d;
+
+    c.last_correction = correction;
+    c.last_error = error;
+
+    return applied_control;
+}
+
+#[derive(Component, Default)]
+pub struct VehiclePID {
+    pub forward_angle_control: Controllable,
+    pub up_angle_control: Controllable,
 }
 
 pub fn refresh_road_network(
@@ -268,36 +299,41 @@ pub fn road_physics_system(
             let force_direction = closest_point - vehicle_position;
             ext_force.force += force_direction * 20.0;
 
-            match closest_segment {
-                Some(closest_segment) => {
-                    const P: f32 = 120.0;
-                    const D: f32 = 0.3;
-                    const I: f32 = -10.0;
-                    const SUB_TARGET_FRACTION: f32 = 0.8;
+            if let Some(closest_segment) = closest_segment {
+                const P: f32 = 120.0;
+                const D: f32 = 0.3;
+                const R: f32 = -10.0;
+                const SUB_TARGET_FRACTION: f32 = 0.8;
 
-                    // Make vehicle more aligned with road
-                    let delta_forward = -closest_segment.segment
-                        .normalize()
-                        .cross(vehicle_transform.forward())
-                        * SUB_TARGET_FRACTION;
+                // Make vehicle more aligned with road
+                let delta_forward = -closest_segment.segment
+                    .normalize()
+                    .cross(vehicle_transform.forward())
+                    * SUB_TARGET_FRACTION;
 
-                    let delta_up = -closest_segment.up
-                        .normalize()
-                        .cross(vehicle_transform.up())
-                        * SUB_TARGET_FRACTION;
+                let delta_up = -closest_segment.up
+                    .normalize()
+                    .cross(vehicle_transform.up())
+                    * SUB_TARGET_FRACTION;
 
-                    let error = delta_forward + delta_up;
-                    let error_delta = error / pid.last_error;
-                    let correction = (delta_forward + delta_up) * P + velocity.angvel * I;
+                ext_force.torque += apply_pid_control(
+                    &mut pid.forward_angle_control,
+                    delta_forward,
+                    velocity.angvel,
+                    P,
+                    R,
+                    D
+                );
 
-                    ext_force.torque += correction + (1.0 / error_delta * correction) * D;
+                ext_force.torque += apply_pid_control(
+                    &mut pid.up_angle_control,
+                    delta_up,
+                    velocity.angvel,
+                    P,
+                    R,
+                    D
+                );
 
-
-                    pid.last_correction = correction;
-                    pid.last_error = error;
-                }
-                _ => {
-                }
             };
         },
         _ => {}
