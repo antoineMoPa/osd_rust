@@ -43,6 +43,7 @@ fn apply_pid_control(
 pub struct VehiclePID {
     pub forward_angle_control: Controllable,
     pub up_angle_control: Controllable,
+    pub position_control: Controllable,
 }
 
 pub fn refresh_road_network(
@@ -296,9 +297,6 @@ pub fn road_physics_system(
                 return;
             }
 
-            let force_direction = closest_point - vehicle_position;
-            ext_force.force += force_direction * 20.0;
-
             if let Some(closest_segment) = closest_segment {
                 const P: f32 = 120.0;
                 const D: f32 = 0.3;
@@ -334,6 +332,16 @@ pub fn road_physics_system(
                     D
                 );
 
+                let delta_position = closest_point - vehicle_position;
+
+                ext_force.force += apply_pid_control(
+                    &mut pid.position_control,
+                    delta_position,
+                    velocity.linvel,
+                    P,
+                    R,
+                    D
+                );
             };
         },
         _ => {}
