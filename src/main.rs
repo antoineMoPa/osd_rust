@@ -369,7 +369,6 @@ fn setup_dynamic_objects(
                     linvel: Vec3::new(0.0, 0.0, 0.0),
                     angvel: Vec3::new(0.0, 0.0, 0.0),
                 })
-                .insert(VehiclePID::default())
                 .insert(ExternalForce {
                     force: Vec3::new(0.0, 0.0, 0.0),
                     torque: Vec3::new(0.0, 0.0, 0.0),

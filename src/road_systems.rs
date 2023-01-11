@@ -8,42 +8,20 @@ use crate::{game::Game, road_network_builder::*};
 use crate::road_network_builder::Segment;
 use bevy_rapier3d::prelude::*;
 
-#[derive(Default)]
-pub struct Controllable {
-    pub last_error: Vec3,
-    pub last_correction: Vec3,
-}
-
 
 // There are probably conceptual errors in there, but it works.
 // This is a mechanism similar to a PID.
 // P: adjustement of correction based on current position difference
 // R: adjustement of correction based on rate of change
 // D: adjustement of correction based on current variation of error
-fn apply_pid_control(
-    c: &mut Controllable,
+fn apply_control(
     delta: Vec3,
     rate_of_change: Vec3,// -> velocity.angvel
     p: f32,
     r: f32, // (old i)
-    d: f32
 ) -> Vec3 {
-    let error: Vec3 = delta;
-    let error_delta: Vec3 = error / c.last_error;
     let correction: Vec3 = delta * p + rate_of_change * r;
-    let applied_control: Vec3 = correction + (1.0 / error_delta * correction) * d;
-
-    c.last_correction = correction;
-    c.last_error = error;
-
-    return applied_control;
-}
-
-#[derive(Component, Default)]
-pub struct VehiclePID {
-    pub forward_angle_control: Controllable,
-    pub up_angle_control: Controllable,
-    pub position_control: Controllable,
+    return correction;
 }
 
 pub fn refresh_road_network(
@@ -200,7 +178,6 @@ pub fn road_physics_system(
     game: ResMut<Game>,
     mut ext_forces: Query<&mut ExternalForce>,
     mut velocities: Query<&mut Velocity>,
-    mut pids: Query<&mut VehiclePID>,
 
 ) {
     let vehicle_entity = match game.player_car {
@@ -284,11 +261,6 @@ pub fn road_physics_system(
         _ => return
     };
 
-    let mut pid = match pids.get_mut(vehicle_entity) {
-        Ok(pid) => pid,
-        _ => return
-    };
-
     match closest_point {
         Some(closest_point) => {
 
@@ -298,8 +270,7 @@ pub fn road_physics_system(
             }
 
             if let Some(closest_segment) = closest_segment {
-                const P: f32 = 120.0;
-                const D: f32 = 0.3;
+                const P: f32 = 160.0;
                 const R: f32 = -10.0;
                 const SUB_TARGET_FRACTION: f32 = 0.8;
 
@@ -314,34 +285,37 @@ pub fn road_physics_system(
                     .cross(vehicle_transform.up())
                     * SUB_TARGET_FRACTION;
 
-                ext_force.torque += apply_pid_control(
-                    &mut pid.forward_angle_control,
+                ext_force.torque += apply_control(
                     delta_forward,
                     velocity.angvel,
                     P,
                     R,
-                    D
                 );
 
-                ext_force.torque += apply_pid_control(
-                    &mut pid.up_angle_control,
+                ext_force.torque += apply_control(
                     delta_up,
                     velocity.angvel,
                     P,
                     R,
-                    D
                 );
 
-                let delta_position = closest_point - vehicle_position;
+                {
+                    const P: f32 = 120.0;
+                    const R: f32 = -10.0;
 
-                ext_force.force += apply_pid_control(
-                    &mut pid.position_control,
-                    delta_position,
-                    velocity.linvel,
-                    P,
-                    R,
-                    D
-                );
+                    let delta_position: Vec3 = closest_point - vehicle_position;
+
+                    let centering_force = apply_control(
+                        delta_position,
+                        velocity.linvel,
+                        P,
+                        R,
+                    );
+
+                    // This force will only act on the plane perpendicular to the segment.
+                    ext_force.force += centering_force
+                        - centering_force.project_onto(closest_segment.segment);
+                }
             };
         },
         _ => {}
