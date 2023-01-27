@@ -342,7 +342,8 @@ fn camera_target_target_system(
 fn setup_dynamic_objects(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut game: ResMut<Game>
+    mut game: ResMut<Game>,
+    _meshes: ResMut<Assets<Mesh>>,
 ) {
     // Create the ground.
     commands
@@ -361,8 +362,8 @@ fn setup_dynamic_objects(
                     ..Default::default()
                 })
                 .insert(RigidBody::Dynamic)
-                .insert(Collider::cuboid(1.0, 1.0, 4.0))
-                .insert(ColliderMassProperties::Density(0.04))
+                .insert(Collider::cuboid(0.3, 0.3, 3.0))
+                .insert(ColliderMassProperties::Density(0.3))
                 .insert(Friction::coefficient(0.0))
                 .insert(Damping { linear_damping: 0.8, angular_damping: 0.4 })
                 .insert(Velocity {
@@ -374,6 +375,25 @@ fn setup_dynamic_objects(
                     torque: Vec3::new(0.0, 0.0, 0.0),
                 })
                 .id());
+
+    let trailer = asset_server.load("road_trailer_0001/model.glb#Scene0");
+    let joint = RevoluteJointBuilder::new(Vec3::Y)
+        .local_anchor1(Vec3::new(0.0, -1.0, 3.0))
+        .local_anchor2(Vec3::new(0.0, 0.0, -3.0));
+
+    commands
+        .spawn_bundle(SceneBundle {
+            scene: trailer,
+            transform: Transform::from_xyz(0.0, 0.0, -3.0),
+            ..Default::default()
+        })
+        .insert(RigidBody::Dynamic)
+        .insert(RigidBody::Dynamic)
+        .insert(Collider::cuboid(1.5, 0.3, 1.5))
+        .insert(ColliderMassProperties::Density(0.2))
+        .insert(Damping { linear_damping: 0.9, angular_damping: 0.1 })
+        .insert(ImpulseJoint::new(game.player_car.unwrap(), joint));
+
 
     // let ball_amount_per_dimension = 30;
     //

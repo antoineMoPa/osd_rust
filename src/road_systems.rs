@@ -270,8 +270,8 @@ pub fn road_physics_system(
             }
 
             if let Some(closest_segment) = closest_segment {
-                const P: f32 = 160.0;
-                const R: f32 = -10.0;
+                const P: f32 = 40.0;
+                const R: f32 = -3.0;
                 const SUB_TARGET_FRACTION: f32 = 0.8;
 
                 // Make vehicle more aligned with road
@@ -300,8 +300,8 @@ pub fn road_physics_system(
                 );
 
                 {
-                    const P: f32 = 120.0;
-                    const R: f32 = -10.0;
+                    const P: f32 = 4.0;
+                    const R: f32 = -2.0;
 
                     let delta_position: Vec3 = closest_point - vehicle_position;
 
