@@ -173,12 +173,164 @@ fn find_closest_point_on_segment_capped(segment_a: Vec3, segment_b: Vec3, p: Vec
     }
 }
 
-pub fn road_physics_system(
+struct EntityAndWeight {
+    entity: Entity,
+    weight: f32,
+}
+
+fn bring_entities_closer_to_road(
+    entities_and_weights: Vec<EntityAndWeight>,
     mut transforms: Query<&mut Transform>,
     game: ResMut<Game>,
     mut ext_forces: Query<&mut ExternalForce>,
     mut velocities: Query<&mut Velocity>,
+) {
+    for entity_and_weight in entities_and_weights {
+        let entity = entity_and_weight.entity;
+        let weight = entity_and_weight.weight;
 
+        let mut ext_force = match ext_forces.get_mut(entity) {
+            Ok(ext_force) => ext_force,
+            _ => {
+                return;
+            }
+        };
+
+        let transform = match transforms.get_mut(entity) {
+            Ok(vehicle_transform) => vehicle_transform,
+            _ => {
+                return;
+            }
+        };
+        let position = transform.translation;
+
+        struct ClosestPointInfo {
+            segment: Vec3,
+            up: Vec3,
+        }
+
+        let mut closest_segment: Option<ClosestPointInfo> = None;
+        let mut closest_segment_index: Option<usize> = None;
+        let mut closest_point: Option<Vec3> = None;
+        let mut closest_dist: Option<f32> = None;
+
+        // In this game, vehicles float above roads
+        let offset: Vec3 = Vec3::Y * 5.5;
+
+        // find close segments to vehicle (dumb, not efficient)
+        for (index, segment_data) in game.road_network.road_segments.iter().enumerate() {
+            let p1: Vec3 = segment_data.a + offset;
+            let p2: Vec3 = segment_data.b + offset;
+            let closest_point_to_segment: Option<Vec3> = find_closest_point_on_segment_capped(p1, p2, transform.translation);
+
+
+            match closest_point_to_segment {
+                Some(closest_point_to_segment) => {
+                    let dist: f32 = (closest_point_to_segment - position).length();
+
+                    match closest_dist {
+                        Some(closest_dist) => {
+                            if closest_segment_index.is_none() || closest_point.is_none() {
+                                panic!("If dist is set, then we also expect closest_point and closest_segment_index.");
+                            }
+
+                            if dist < closest_dist {
+                                // We become the new closest dist
+                            } else {
+                               // Continue, so that we don't set the closest dist.
+                                continue;
+                            }
+                        },
+                        _ => {}
+                    }
+
+                    // 0: This first point becomes the new closest dist
+                    // 1..n: This point is the closest now. Update!
+                    closest_dist = Some(dist);
+                    closest_point = Some(closest_point_to_segment);
+                    closest_segment_index = Some(index);
+                    closest_segment = Some(ClosestPointInfo {
+                        segment: segment_data.b - segment_data.a,
+                        up: segment_data.up
+                    });
+                },
+                _ => {}
+            }
+        }
+
+        let velocity = match velocities.get_mut(entity) {
+            Ok(velocity) => velocity,
+            _ => return
+        };
+
+        match closest_point {
+            Some(closest_point) => {
+
+                // Too far: outside of road force field.
+                if closest_dist.unwrap() > 30.0 {
+                    return;
+                }
+
+                if let Some(closest_segment) = closest_segment {
+                    let p: f32 = 40.0 * weight;
+                    let r: f32 = -3.0 * weight;
+                    const SUB_TARGET_FRACTION: f32 = 0.8;
+
+                    // Make vehicle more aligned with road
+                    let delta_forward = -closest_segment.segment
+                        .normalize()
+                        .cross(transform.forward())
+                        * SUB_TARGET_FRACTION;
+
+                    let delta_up = -closest_segment.up
+                        .normalize()
+                        .cross(transform.up())
+                        * SUB_TARGET_FRACTION;
+
+                    ext_force.torque += apply_control(
+                        delta_forward,
+                        velocity.angvel,
+                        p,
+                        r,
+                    );
+
+                    ext_force.torque += apply_control(
+                        delta_up,
+                        velocity.angvel,
+                        p,
+                        r,
+                    );
+
+                    {
+                        let p: f32 = 4.0 * weight;
+                        let r: f32 = -2.0 * weight;
+
+                        let delta_position: Vec3 = closest_point - position;
+
+                        let centering_force = apply_control(
+                            delta_position,
+                            velocity.linvel,
+                            p,
+                            r,
+                        );
+
+                        // This force will only act on the plane perpendicular to the segment.
+                        ext_force.force += centering_force
+                            - centering_force.project_onto(closest_segment.segment);
+                    }
+                };
+            },
+            _ => {}
+        }
+    }
+}
+
+
+pub fn road_physics_system(
+    transforms: Query<&mut Transform>,
+    game: ResMut<Game>,
+    ext_forces: Query<&mut ExternalForce>,
+    velocities: Query<&mut Velocity>,
 ) {
     let vehicle_entity = match game.player_car {
         Some(entity) => entity,
@@ -187,137 +339,33 @@ pub fn road_physics_system(
         }
     };
 
-    let mut ext_force = match ext_forces.get_mut(vehicle_entity) {
-        Ok(ext_force) => ext_force,
+    let trailer_entity = match game.trailer {
+        Some(entity) => entity,
         _ => {
             return;
         }
     };
 
-    let vehicle_transform = match transforms.get_mut(vehicle_entity) {
-        Ok(vehicle_transform) => vehicle_transform,
-        _ => {
-            return;
-        }
-    };
-    let vehicle_position = vehicle_transform.translation;
-
-    struct ClosestPointInfo {
-        segment: Vec3,
-        up: Vec3,
-    }
-
-    let mut closest_segment: Option<ClosestPointInfo> = None;
-    let mut closest_segment_index: Option<usize> = None;
-    let mut closest_point: Option<Vec3> = None;
-    let mut closest_dist: Option<f32> = None;
-
-    // In this game, vehicles float above roads
-    let offset: Vec3 = Vec3::Y * 1.5;
-
-    // find close segments to vehicle (dumb, not efficient)
-    for (index, segment_data) in game.road_network.road_segments.iter().enumerate() {
-        let p1: Vec3 = segment_data.a + offset;
-        let p2: Vec3 = segment_data.b + offset;
-        let closest_point_to_segment: Option<Vec3> = find_closest_point_on_segment_capped(p1, p2, vehicle_transform.translation);
-
-
-        match closest_point_to_segment {
-            Some(closest_point_to_segment) => {
-                let dist: f32 = (closest_point_to_segment - vehicle_position).length();
-
-                match closest_dist {
-                    Some(closest_dist) => {
-                        if closest_segment_index.is_none() || closest_point.is_none() {
-                            panic!("If dist is set, then we also expect closest_point and closest_segment_index.");
-                        }
-
-                        if dist < closest_dist {
-                            // We become the new closest dist
-                        } else {
-                           // Continue, so that we don't set the closest dist.
-                            continue;
-                        }
-                    },
-                    _ => {}
-                }
-
-                // 0: This first point becomes the new closest dist
-                // 1..n: This point is the closest now. Update!
-                closest_dist = Some(dist);
-                closest_point = Some(closest_point_to_segment);
-                closest_segment_index = Some(index);
-                closest_segment = Some(ClosestPointInfo {
-                    segment: segment_data.b - segment_data.a,
-                    up: segment_data.up
-                });
+    bring_entities_closer_to_road(
+        vec!(
+            EntityAndWeight {
+                entity: vehicle_entity,
+                weight: 1.0,
             },
-            _ => {}
-        }
-    }
-
-    let velocity = match velocities.get_mut(vehicle_entity) {
-        Ok(velocity) => velocity,
-        _ => return
-    };
-
-    match closest_point {
-        Some(closest_point) => {
-
-            // Too far: outside of road force field.
-            if closest_dist.unwrap() > 10.0 {
-                return;
+            EntityAndWeight {
+                entity: trailer_entity,
+                weight: 1.5,
             }
+        ),
+        transforms,
+        game,
+        ext_forces,
+        velocities
+    );
 
-            if let Some(closest_segment) = closest_segment {
-                const P: f32 = 40.0;
-                const R: f32 = -3.0;
-                const SUB_TARGET_FRACTION: f32 = 0.8;
+    // trailer should tend to continue on it's current direction
 
-                // Make vehicle more aligned with road
-                let delta_forward = -closest_segment.segment
-                    .normalize()
-                    .cross(vehicle_transform.forward())
-                    * SUB_TARGET_FRACTION;
-
-                let delta_up = -closest_segment.up
-                    .normalize()
-                    .cross(vehicle_transform.up())
-                    * SUB_TARGET_FRACTION;
-
-                ext_force.torque += apply_control(
-                    delta_forward,
-                    velocity.angvel,
-                    P,
-                    R,
-                );
-
-                ext_force.torque += apply_control(
-                    delta_up,
-                    velocity.angvel,
-                    P,
-                    R,
-                );
-
-                {
-                    const P: f32 = 4.0;
-                    const R: f32 = -2.0;
-
-                    let delta_position: Vec3 = closest_point - vehicle_position;
-
-                    let centering_force = apply_control(
-                        delta_position,
-                        velocity.linvel,
-                        P,
-                        R,
-                    );
-
-                    // This force will only act on the plane perpendicular to the segment.
-                    ext_force.force += centering_force
-                        - centering_force.project_onto(closest_segment.segment);
-                }
-            };
-        },
-        _ => {}
-    }
+    // - Add a force to compensate rotation
+    // - Add a joint and a mass at the rear of the trailer?
+    // - 3??
 }

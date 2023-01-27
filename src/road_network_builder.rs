@@ -78,10 +78,12 @@ pub fn build_road_network(
         //         right    --------->
         //
 
-        let p1: Vec3 = a + left * 1.5;
-        let p2: Vec3 = a + right * 1.5;
-        let p3: Vec3 = b + next_left * 1.5;
-        let p4: Vec3 = b + next_right * 1.5;
+        const WIDTH: f32 = 10.0;
+
+        let p1: Vec3 = a + left * WIDTH / 2.0;
+        let p2: Vec3 = a + right * WIDTH / 2.0;
+        let p3: Vec3 = b + next_left * WIDTH / 2.0;
+        let p4: Vec3 = b + next_right * WIDTH / 2.0;
 
         position_attributes.push(p1.into());
         position_attributes.push(p2.into());

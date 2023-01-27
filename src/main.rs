@@ -219,21 +219,33 @@ fn reset_forces_system(
     game: ResMut<Game>,
     mut ext_forces: Query<&mut ExternalForce>,
 ) {
-    let entity = match game.player_car {
+    let vehicle_entity = match game.player_car {
         Some(entity) => entity,
         _ => {
             return;
         }
     };
-    let mut ext_force = match ext_forces.get_mut(entity) {
-        Ok(ext_force) => ext_force,
+
+    let trailer_entity = match game.trailer {
+        Some(entity) => entity,
         _ => {
             return;
         }
     };
 
-    ext_force.force = Vec3::ZERO;
-    ext_force.torque = Vec3::ZERO;
+    let entities: Vec<Entity> = vec!(vehicle_entity, trailer_entity);
+
+    for entity in entities {
+        let mut ext_force = match ext_forces.get_mut(entity) {
+            Ok(ext_force) => ext_force,
+            _ => {
+                return;
+            }
+        };
+
+        ext_force.force = Vec3::ZERO;
+        ext_force.torque = Vec3::ZERO;
+    }
 }
 
 fn keyboard_input_system(
@@ -378,21 +390,32 @@ fn setup_dynamic_objects(
 
     let trailer = asset_server.load("road_trailer_0001/model.glb#Scene0");
     let joint = RevoluteJointBuilder::new(Vec3::Y)
-        .local_anchor1(Vec3::new(0.0, -1.0, 3.0))
+        .local_anchor1(Vec3::new(0.0, 0.0, 3.0))
         .local_anchor2(Vec3::new(0.0, 0.0, -3.0));
 
-    commands
-        .spawn_bundle(SceneBundle {
-            scene: trailer,
-            transform: Transform::from_xyz(0.0, 0.0, -3.0),
-            ..Default::default()
-        })
-        .insert(RigidBody::Dynamic)
-        .insert(RigidBody::Dynamic)
-        .insert(Collider::cuboid(1.5, 0.3, 1.5))
-        .insert(ColliderMassProperties::Density(0.2))
-        .insert(Damping { linear_damping: 0.9, angular_damping: 0.1 })
-        .insert(ImpulseJoint::new(game.player_car.unwrap(), joint));
+    game.trailer =
+        Some(
+            commands
+                .spawn_bundle(SceneBundle {
+                    scene: trailer,
+                    transform: Transform::from_xyz(0.0, 0.0, -3.0),
+                    ..Default::default()
+                })
+                .insert(Friction::coefficient(0.0))
+                .insert(RigidBody::Dynamic)
+                .insert(Collider::cuboid(1.5, 0.3, 1.5))
+                .insert(ColliderMassProperties::Density(0.3))
+                .insert(Damping { linear_damping: 0.8, angular_damping: 0.4 })
+                .insert(ImpulseJoint::new(game.player_car.unwrap(), joint))
+                .insert(Velocity {
+                    linvel: Vec3::new(0.0, 0.0, 0.0),
+                    angvel: Vec3::new(0.0, 0.0, 0.0),
+                })
+                .insert(ExternalForce {
+                    force: Vec3::new(0.0, 0.0, 0.0),
+                    torque: Vec3::new(0.0, 0.0, 0.0),
+                })
+                .id());
 
 
     // let ball_amount_per_dimension = 30;

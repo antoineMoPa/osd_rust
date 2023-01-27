@@ -15,6 +15,7 @@ pub struct CameraTarget {
 #[derive(Default)]
 pub struct Game {
     pub player_car: Option<Entity>,
+    pub trailer: Option<Entity>,
     pub camera_target: CameraTarget,
     pub camera: Option<Entity>,
     pub road_network: RoadNetwork,
