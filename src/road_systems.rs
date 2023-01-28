@@ -8,6 +8,8 @@ use crate::{game::Game, road_network_builder::*};
 use crate::road_network_builder::Segment;
 use bevy_rapier3d::prelude::*;
 
+const TRAILER_ATTACH_DISTANCE: f32 = 10.0;
+
 // There are probably conceptual errors in there, but it works.
 // This is a mechanism similar to a PID.
 // P: adjustement of correction based on current position difference
@@ -50,6 +52,13 @@ pub fn road_network_creation_system(
     materials: ResMut<Assets<StandardMaterial>>,
     mut commands: Commands,
 ) {
+    let vehicle_entity = match game.player_car {
+        Some(vehicle_entity) => vehicle_entity,
+        _ => {
+            return;
+        }
+    };
+
     let trailer_entity = match game.trailer {
         Some(trailer_entity) => trailer_entity,
         _ => {
@@ -64,8 +73,15 @@ pub fn road_network_creation_system(
         }
     };
 
-    let mut trailer_transform = match transforms.get_mut(trailer_entity) {
+    let trailer_transform = match transforms.get(trailer_entity) {
         Ok(trailer_transform) => trailer_transform,
+        _ => {
+            return;
+        }
+    };
+
+    let vehicle_transform = match transforms.get(vehicle_entity) {
+        Ok(vehicle_transform) => vehicle_transform,
         _ => {
             return;
         }
@@ -106,7 +122,10 @@ pub fn road_network_creation_system(
         let joint = match game.trailer_joint {
             Some(joint) => joint,
             _ => {
-                // Link trailer
+                // Link trailer if close enough
+                if vehicle_transform.translation.distance(trailer_transform.translation) > TRAILER_ATTACH_DISTANCE {
+                    return;
+                }
                 let joint_builder: RevoluteJointBuilder =  RevoluteJointBuilder::new(Vec3::Y)
                     .local_anchor1(Vec3::new(0.0, 0.0, 3.0))
                     .local_anchor2(Vec3::new(0.0, 0.0, -5.0));
@@ -142,7 +161,7 @@ pub fn road_network_creation_system(
         game.road_network.road_segments.clear();
         game.road_network.last_position = Some(Vec3::ZERO);
 
-        trailer_transform.translation = Vec3::ZERO;
+        // trailer_transform.translation = Vec3::ZERO;
         ext_force.force = Vec3::ZERO;
         ext_force.torque = Vec3::ZERO;
         refresh_road_network(game, meshes, materials, commands);
