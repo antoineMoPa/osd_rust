@@ -8,7 +8,6 @@ use crate::{game::Game, road_network_builder::*};
 use crate::road_network_builder::Segment;
 use bevy_rapier3d::prelude::*;
 
-
 // There are probably conceptual errors in there, but it works.
 // This is a mechanism similar to a PID.
 // P: adjustement of correction based on current position difference
@@ -49,24 +48,24 @@ pub fn road_network_creation_system(
     mut game: ResMut<Game>,
     meshes: ResMut<Assets<Mesh>>,
     materials: ResMut<Assets<StandardMaterial>>,
-    commands: Commands,
+    mut commands: Commands,
 ) {
-    let vehicle_entity = match game.player_car {
-        Some(vehicle_entity) => vehicle_entity,
+    let trailer_entity = match game.trailer {
+        Some(trailer_entity) => trailer_entity,
         _ => {
             return;
         }
     };
 
-    let mut ext_force = match ext_forces.get_mut(vehicle_entity) {
+    let mut ext_force = match ext_forces.get_mut(trailer_entity) {
         Ok(ext_force) => ext_force,
         _ => {
             return;
         }
     };
 
-    let mut vehicle_transform = match transforms.get_mut(vehicle_entity) {
-        Ok(vehicle_transform) => vehicle_transform,
+    let mut trailer_transform = match transforms.get_mut(trailer_entity) {
+        Ok(trailer_transform) => trailer_transform,
         _ => {
             return;
         }
@@ -74,7 +73,7 @@ pub fn road_network_creation_system(
 
     // E: Insert road segment. (E because it is close to WASD)
     if keyboard_input.just_released(KeyCode::E) {
-        let translation = vehicle_transform.translation;
+        let translation = trailer_transform.translation;
         let current_point = translation.clone();
 
         let last_position = match game.road_network.last_position {
@@ -87,12 +86,41 @@ pub fn road_network_creation_system(
 
         game.road_network.last_position = Some(current_point.clone());
 
-        let segment = Segment { a: last_position.clone(), b: current_point, up: vehicle_transform.up() };
+        let segment = Segment { a: last_position.clone(), b: current_point, up: trailer_transform.up() };
 
         game.road_network.road_segments.push(segment);
         refresh_road_network(game, meshes, materials, commands);
 
         return;
+    }
+
+    // T: Attach/Detach Trailer
+    if keyboard_input.just_released(KeyCode::T) {
+        let trailer = match game.trailer {
+            Some(trailer) => trailer,
+            _ => {
+                return;
+            }
+        };
+
+        let joint = match game.trailer_joint {
+            Some(joint) => joint,
+            _ => {
+                // Link trailer
+                let joint_builder: RevoluteJointBuilder =  RevoluteJointBuilder::new(Vec3::Y)
+                    .local_anchor1(Vec3::new(0.0, 0.0, 3.0))
+                    .local_anchor2(Vec3::new(0.0, 0.0, -5.0));
+
+                let joint = ImpulseJoint::new(game.player_car.unwrap(), joint_builder);
+                game.trailer_joint = Some(joint);
+                commands.entity(trailer).insert(joint);
+
+                return;
+            }
+        };
+
+        commands.entity(trailer).remove::<ImpulseJoint>();
+        game.trailer_joint = None;
     }
 
     // O: Output/Dump road network
@@ -114,7 +142,7 @@ pub fn road_network_creation_system(
         game.road_network.road_segments.clear();
         game.road_network.last_position = Some(Vec3::ZERO);
 
-        vehicle_transform.translation = Vec3::ZERO;
+        trailer_transform.translation = Vec3::ZERO;
         ext_force.force = Vec3::ZERO;
         ext_force.torque = Vec3::ZERO;
         refresh_road_network(game, meshes, materials, commands);
@@ -134,8 +162,8 @@ pub fn road_network_creation_system(
         }
         let segments = game.road_network.macros.last().unwrap().road_segments.clone();
         for segment in &segments {
-            let t: Vec3 = vehicle_transform.translation;
-            let r: Quat = vehicle_transform.rotation;
+            let t: Vec3 = trailer_transform.translation;
+            let r: Quat = trailer_transform.rotation;
             let a = r * segment.a + t;
             let b = r * segment.b + t;
             let up = r * segment.up;
@@ -146,11 +174,11 @@ pub fn road_network_creation_system(
             });
         }
 
-        // move vehicle to last point
-        let last_segment = game.road_network.road_segments.last().unwrap();
-        vehicle_transform.translation = last_segment.b;
-        let t = vehicle_transform.translation;
-        vehicle_transform.look_at(t + (last_segment.b - last_segment.a).normalize(), last_segment.up);
+        // move trailer to last point
+        // let last_segment = game.road_network.road_segments.last().unwrap();
+        // trailer_transform.translation = last_segment.b;
+        // let t = trailer_transform.translation;
+        // trailer_transform.look_at(t + (last_segment.b - last_segment.a).normalize(), last_segment.up);
 
         refresh_road_network(game, meshes, materials, commands);
     }

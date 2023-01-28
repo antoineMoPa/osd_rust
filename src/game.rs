@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::road_network_builder::RoadNetwork;
 use serde::{Serialize, Deserialize};
-
+use bevy_rapier3d::dynamics::*;
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub struct CameraTarget {
@@ -16,6 +16,7 @@ pub struct CameraTarget {
 pub struct Game {
     pub player_car: Option<Entity>,
     pub trailer: Option<Entity>,
+    pub trailer_joint: Option<ImpulseJoint>,
     pub camera_target: CameraTarget,
     pub camera: Option<Entity>,
     pub road_network: RoadNetwork,

@@ -40,8 +40,7 @@ mod road_network_builder;
 mod road_systems;
 
 use road_systems::*;
-
-
+use bevy_rapier3d::dynamics::*;
 
 // The code here is not used in native builds
 #[allow(dead_code)]
@@ -274,8 +273,8 @@ fn keyboard_input_system(
     };
 
     // Apply forces
-    let forward_speed: f32 = 100.0;
-    let backward_speed: f32 = -40.0;
+    let forward_speed: f32 = 160.0;
+    let backward_speed: f32 = -80.0;
 
     if keyboard_input.pressed(KeyCode::W) {
         ext_force.force = transform.forward().mul(Vec3 { x: forward_speed, y: forward_speed, z: forward_speed });
@@ -285,7 +284,7 @@ fn keyboard_input_system(
         ext_force.force = transform.forward().mul(Vec3 { x: backward_speed, y: backward_speed, z: backward_speed });
     }
 
-    let torque: f32 = 12.0;
+    let torque: f32 = 22.0;
 
     if keyboard_input.pressed(KeyCode::Left) {
         ext_force.torque = transform.rotation * Vec3::new(0.0, torque, 0.0);
@@ -374,8 +373,8 @@ fn setup_dynamic_objects(
                     ..Default::default()
                 })
                 .insert(RigidBody::Dynamic)
-                .insert(Collider::cuboid(0.3, 0.3, 3.0))
-                .insert(ColliderMassProperties::Density(0.3))
+                .insert(Collider::cuboid(1.0, 1.0, 3.0))
+                .insert(ColliderMassProperties::Density(0.1))
                 .insert(Friction::coefficient(0.0))
                 .insert(Damping { linear_damping: 0.8, angular_damping: 0.4 })
                 .insert(Velocity {
@@ -389,9 +388,6 @@ fn setup_dynamic_objects(
                 .id());
 
     let trailer = asset_server.load("road_trailer_0001/model.glb#Scene0");
-    let joint = RevoluteJointBuilder::new(Vec3::Y)
-        .local_anchor1(Vec3::new(0.0, 0.0, 3.0))
-        .local_anchor2(Vec3::new(0.0, 0.0, -3.0));
 
     game.trailer =
         Some(
@@ -405,8 +401,7 @@ fn setup_dynamic_objects(
                 .insert(RigidBody::Dynamic)
                 .insert(Collider::cuboid(1.5, 0.3, 1.5))
                 .insert(ColliderMassProperties::Density(0.3))
-                .insert(Damping { linear_damping: 0.8, angular_damping: 0.4 })
-                .insert(ImpulseJoint::new(game.player_car.unwrap(), joint))
+                .insert(Damping { linear_damping: 0.8, angular_damping: 0.9 })
                 .insert(Velocity {
                     linvel: Vec3::new(0.0, 0.0, 0.0),
                     angvel: Vec3::new(0.0, 0.0, 0.0),
